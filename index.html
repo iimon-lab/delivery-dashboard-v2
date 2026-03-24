@@ -1,0 +1,2822 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>収入管理ダッシュボード</title>
+<!-- PWA meta tags -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a25;
+  --border: #2a2a3a;
+  --text: #e8e8f0;
+  --text-dim: #8888a0;
+  --accent: #00d4aa;
+  --accent-dim: #00d4aa33;
+  --uber: #06C167;
+  --demae: #e8452e;
+  --rocket: #5b8def;
+  --menu-co: #f5a623;
+  --danger: #ff4466;
+  --warning: #ffaa00;
+  --success: #00d4aa;
+  --rakuten: #BF0000;
+  --amazon: #FF9900;
+  --coconala: #35C4CE;
+  --dblog: #c77dff;
+  --sns-agency: #70d6ff;
+  --mercari: #ff6b6b;
+  --cashback: #a8e6cf;
+  --extra: #dda0dd;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; color: var(--accent); }
+
+.header-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.month-selector {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 12px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer;
+  color-scheme: dark;
+}
+.month-selector::-webkit-calendar-picker-indicator {
+  filter: brightness(1.5);
+  cursor: pointer;
+}
+
+.btn {
+  padding: 8px 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 8px; cursor: pointer; font-size: 13px; font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+}
+.btn:hover { background: var(--surface2); border-color: var(--accent); }
+.btn-accent { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+.btn-accent:hover { background: #00e8bb; }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-icon { display: inline-flex; align-items: center; justify-content: center; font-size: 16px; padding: 6px 10px; }
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 0;
+}
+.tab {
+  padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text-dim);
+  border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Summary Cards */
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px;
+}
+.summary-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px; position: relative; overflow: hidden;
+}
+.summary-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.summary-card.total::before { background: var(--accent); }
+.summary-card.delivery::before { background: var(--uber); }
+.summary-card.side::before { background: var(--coconala); }
+.summary-card.remaining::before { background: var(--danger); }
+.summary-card.daily::before { background: var(--warning); }
+.summary-card.pace::before { background: var(--success); }
+.summary-card.payment::before { background: var(--rocket); }
+
+.summary-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.summary-value { font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700; }
+.summary-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+/* Progress Bar */
+.progress-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 24px;
+}
+.progress-header { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 13px; }
+.progress-bar-bg { background: var(--surface2); border-radius: 8px; height: 24px; overflow: hidden; position: relative; }
+.progress-bar-fill {
+  height: 100%; border-radius: 8px; transition: width 0.5s ease;
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 8px;
+  font-size: 11px; font-weight: 700; color: #000;
+}
+.progress-stacked { display: flex; height: 100%; border-radius: 8px; overflow: hidden; }
+.progress-segment { height: 100%; transition: width 0.5s ease; min-width: 0; }
+
+/* Input Section */
+.input-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 24px;
+}
+.input-section h2 { font-size: 15px; margin-bottom: 16px; color: var(--text-dim); }
+
+.input-row {
+  display: grid; gap: 8px; align-items: center; margin-bottom: 8px;
+}
+.input-row.header-row {
+  font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+
+/* スマホ用カード形式 */
+.day-card {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.day-card.off-day { opacity: 0.5; }
+.day-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.day-card-header .date-label { font-size: 15px; font-weight: 700; }
+.day-card-header .day-total { font-size: 17px; }
+.day-card-inputs { display: flex; flex-direction: column; gap: 6px; }
+.day-card-field {
+  display: flex; align-items: center; gap: 8px;
+}
+.day-card-field .field-label {
+  font-size: 12px; min-width: 70px; white-space: nowrap;
+}
+.day-card-field .field-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0;
+}
+.day-card-field input { flex: 1; }
+.day-card-field.no-payout-field { opacity: 0.35; }
+.day-card-field.no-payout-field input { background: #333; }
+input.daily-input.no-payout-input { opacity: 0.35; background: #333; }
+
+.date-label { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+.date-label .dow { font-size: 11px; color: var(--text-dim); margin-left: 4px; }
+.date-label .dow.sat { color: var(--rocket); }
+.date-label .dow.sun { color: var(--danger); }
+
+input[type="number"], input[type="text"] {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; width: 100%; text-align: right; -moz-appearance: textfield;
+}
+input[type="text"] { text-align: left; font-family: 'DM Sans', sans-serif; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"]:focus, input[type="text"]:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+.day-total { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; text-align: right; width: 110px; min-width: 110px; white-space: nowrap; }
+.input-row input[type="number"], .input-row input.daily-input { font-size: 18px; padding: 10px 12px; max-width: 130px; justify-self: start; }
+.day-card-field input[type="number"], .day-card-field input.daily-input { font-size: 17px; padding: 10px 12px; max-width: 180px; }
+input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace; -moz-appearance: textfield; }
+
+/* Side Income Section */
+.side-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 16px;
+}
+.side-card {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+}
+.side-card h3 {
+  font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+}
+.side-input-row {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+}
+.side-input-row label { font-size: 12px; color: var(--text-dim); min-width: 60px; }
+.side-input-row input { flex: 1; }
+
+/* Extra Income: font sizes */
+#tab-extra .side-input-row input,
+#tab-extra .extra-item input { font-size: 18px; padding: 10px 12px; }
+#tab-extra input.extra-amount { text-align: right; font-family: 'JetBrains Mono', monospace; -moz-appearance: textfield; }
+#tab-mainJob .extra-item input { font-size: 18px; padding: 10px 12px; }
+#tab-mainJob input.extra-amount { text-align: right; font-family: 'JetBrains Mono', monospace; -moz-appearance: textfield; }
+
+/* Extra Income List */
+.extra-list { margin-top: 12px; }
+.extra-item {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+  padding: 8px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border);
+}
+.extra-item input.extra-label { flex: 2; }
+.extra-item input.extra-amount { flex: 1; }
+.extra-item .remove-btn {
+  background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 4px 8px;
+}
+.extra-item .remove-btn:hover { background: var(--danger); color: #fff; border-radius: 4px; }
+
+/* Payout Section */
+.payout-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 24px;
+}
+.payout-section h2 { font-size: 15px; margin-bottom: 16px; color: var(--text-dim); }
+.payout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.payout-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--surface2); }
+.payout-card h3 { font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.payout-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.payout-row {
+  display: grid; grid-template-columns: 1fr 80px 100px; font-size: 12px; padding: 4px 0;
+  border-bottom: 1px solid var(--border); gap: 8px; align-items: center;
+}
+.payout-row:last-child { border: none; }
+.payout-row > span:nth-child(2) { text-align: center; }
+.payout-amount { font-family: 'JetBrains Mono', monospace; font-weight: 700; white-space: nowrap; text-align: right; }
+
+/* Payout Goal */
+.payout-goal {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; margin-bottom: 16px;
+}
+.payout-goal h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 10px; }
+.payout-goal-inputs { display: flex; gap: 16px; align-items: center; }
+.payout-goal-field { display: flex; align-items: center; gap: 8px; flex: 1; }
+.payout-goal-field label { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.payout-goal-field input { flex: 1; }
+.payout-goal-field .unit { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.payout-goal-progress { margin-top: 12px; }
+.payout-goal-summary { font-size: 13px; margin-bottom: 8px; }
+.payout-goal-later { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+.payout-goal-note { font-size: 10px; color: var(--text-dim); margin-top: 8px; font-style: italic; }
+.payout-goal-placeholder { font-size: 12px; color: var(--text-dim); margin-top: 10px; text-align: center; padding: 8px; }
+
+/* Settings */
+.settings-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 24px;
+}
+.settings-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.settings-row label { font-size: 13px; min-width: 140px; color: var(--text-dim); }
+.settings-row input[type="number"],
+.settings-row input.settings-amount { width: 120px; }
+#monthlyTarget, #goalDayInput { font-size: 18px; padding: 10px 12px; }
+#monthlyTarget { text-align: right; font-family: 'JetBrains Mono', monospace; width: 200px; }
+.settings-row input[type="checkbox"] { width: auto; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: #000;
+  padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 700;
+  transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 100;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+/* Daily Result Button */
+.daily-result-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 6px; cursor: pointer; font-size: 14px; padding: 4px 10px;
+  transition: all 0.15s; display: none; white-space: nowrap;
+}
+.daily-result-btn:hover { border-color: var(--accent); color: var(--accent); }
+.daily-result-btn.visible { display: inline-block; }
+
+/* Daily Result Modal */
+.dr-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  z-index: 200; align-items: center; justify-content: center;
+}
+.dr-overlay.open { display: flex; }
+.dr-modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  width: 400px; max-width: 90vw; padding: 28px 24px 20px; position: relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.dr-close {
+  position: absolute; top: 12px; right: 14px; background: none; border: none;
+  color: var(--text-dim); font-size: 20px; cursor: pointer; padding: 4px 8px;
+  line-height: 1; border-radius: 4px;
+}
+.dr-close:hover { color: var(--text); background: var(--surface2); }
+.dr-date {
+  font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 20px;
+  text-align: center;
+}
+.dr-items { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.dr-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: var(--surface2); border-radius: 8px;
+}
+.dr-item-name { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; }
+.dr-item-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.dr-item-amount { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; }
+.dr-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0 12px; }
+.dr-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 4px; margin-bottom: 16px;
+}
+.dr-total-label { font-size: 14px; font-weight: 700; color: var(--text-dim); }
+.dr-total-amount {
+  font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
+  color: var(--accent);
+}
+.dr-brand {
+  text-align: center; font-size: 10px; color: var(--text-dim); letter-spacing: 0.5px;
+  opacity: 0.6;
+}
+
+.input-row.off-day { opacity: 0.35; }
+.input-row.off-day .date-label { text-decoration: line-through; }
+
+/* Breakdown bar */
+.breakdown { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.breakdown-item { font-size: 11px; display: flex; align-items: center; gap: 4px; }
+.breakdown-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+/* Holiday Calendar */
+.holiday-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px; margin-bottom: 24px;
+}
+.holiday-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.holiday-header h2 { font-size: 15px; color: var(--text-dim); margin: 0; }
+.holiday-header .arrow { font-size: 12px; color: var(--text-dim); transition: transform 0.2s; }
+.holiday-header .arrow.open { transform: rotate(180deg); }
+.holiday-body { overflow: hidden; transition: max-height 0.3s ease; }
+.holiday-info {
+  font-size: 12px; color: var(--text-dim); margin-bottom: 12px;
+  display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+}
+.holiday-info .val { font-family: 'JetBrains Mono', monospace; color: var(--text); font-weight: 700; }
+.holiday-calendar {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.holiday-dow {
+  font-size: 10px; color: var(--text-dim); text-align: center; padding: 4px 0; letter-spacing: 0.5px;
+}
+.holiday-dow.sun { color: var(--danger); }
+.holiday-dow.sat { color: var(--rocket); }
+.holiday-cell {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  cursor: pointer; border: 2px solid transparent; transition: all 0.12s;
+  background: var(--surface2); user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.holiday-cell:active { transform: scale(0.9); }
+.holiday-cell.holiday { background: var(--danger); color: #fff; font-weight: 700; border-color: var(--danger); }
+.holiday-cell.today { border-color: var(--accent); }
+.holiday-cell.today.holiday { border-color: #fff; }
+.holiday-cell.empty { background: none; cursor: default; pointer-events: none; }
+.holiday-cell.sun-col { color: var(--danger); }
+.holiday-cell.sat-col { color: var(--rocket); }
+.holiday-cell.holiday.sun-col, .holiday-cell.holiday.sat-col { color: #fff; }
+.holiday-cell.no-payout { opacity: 0.35; background: #333; color: var(--text-dim); }
+.holiday-cell.no-payout.holiday { opacity: 0.3; background: #553333; }
+.holiday-legend { font-size: 11px; color: var(--text-dim); margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.holiday-legend-item { display: flex; align-items: center; gap: 5px; }
+.holiday-legend-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+
+/* --- 支出項目管理UI --- */
+.expense-manager { margin-top: 16px; padding: 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; }
+.expense-manager h3 { margin: 0 0 12px 0; font-size: 14px; color: var(--text-dim); }
+.expense-item { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; padding: 8px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); }
+.expense-item input.expense-name { flex: 2; font-family: 'DM Sans', sans-serif; text-align: left; }
+.expense-item input.expense-amount { flex: 1; text-align: right; font-family: 'JetBrains Mono', monospace; }
+.expense-item .remove-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 4px 8px; }
+.expense-item .remove-btn:hover { background: var(--danger); color: #fff; border-radius: 4px; }
+.expense-total-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 8px 0; border-top: 1px solid var(--border); margin-top: 8px; font-size: 13px; }
+.expense-total-row .total-label { color: var(--text-dim); }
+.expense-total-row .total-value { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); font-size: 15px; }
+
+/* --- 業者管理UI --- */
+.source-manager { margin-top: 20px; padding: 16px; background: #1e1e2e; border-radius: 10px; }
+.source-manager h3 { margin: 0 0 12px 0; font-size: 14px; color: #aaa; }
+.source-list { display: flex; flex-direction: column; gap: 8px; }
+.source-item {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; background: #2a2a3e; border-radius: 8px;
+}
+.payout-config {
+  flex: 0 0 100%; margin-top: 4px; padding: 6px 0 2px 28px; border-top: 1px solid #333; font-size: 12px;
+}
+.payout-type-radios {
+  display: flex; gap: 12px; margin-bottom: 6px;
+}
+.payout-type-radios label {
+  display: flex; align-items: center; gap: 4px; color: var(--text-dim); font-size: 12px; cursor: pointer;
+}
+.payout-type-radios input[type="radio"] { accent-color: var(--accent); width: 14px; height: 14px; }
+.payout-detail {
+  padding: 6px 0 2px 10px; border-left: 2px solid var(--border); margin-left: 4px;
+}
+.payout-detail-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap;
+}
+.payout-detail-row > label {
+  font-size: 12px; color: var(--text-dim); min-width: 55px;
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+}
+.payout-detail-row input[type="radio"] { accent-color: var(--accent); width: 14px; height: 14px; }
+.payout-num-input {
+  width: 56px !important; min-width: 56px !important; flex: 0 0 56px !important;
+  text-align: center !important; font-size: 13px !important; padding: 4px 4px !important;
+  background: var(--surface) !important; border: 1px solid var(--border) !important;
+  border-radius: 4px !important; color: var(--text) !important;
+  -moz-appearance: textfield;
+}
+.payout-num-input::-webkit-inner-spin-button { opacity: 1; }
+.payout-dow-select {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;
+}
+.payout-note { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.source-item input[type="text"] {
+  flex: 1; background: #1a1a2e; border: 1px solid #444; border-radius: 6px;
+  color: #fff; padding: 6px 8px; font-size: 13px;
+}
+.source-item input[type="color"] {
+  width: 32px; height: 32px; border: none; border-radius: 6px;
+  cursor: pointer; background: none; padding: 0;
+}
+.source-item .drag-handle { cursor: grab; color: #666; font-size: 16px; user-select: none; }
+.source-item .delete-btn {
+  background: none; border: none; color: #666; font-size: 18px;
+  cursor: pointer; padding: 0 4px; line-height: 1;
+}
+.source-item .delete-btn:hover { color: #ff6b6b; }
+.add-source-btn {
+  margin-top: 10px; width: 100%; padding: 8px; background: #2a2a3e;
+  border: 1px dashed #555; border-radius: 8px; color: #888;
+  cursor: pointer; font-size: 13px;
+}
+.add-source-btn:hover { background: #333350; color: #aaa; }
+
+/* Scroll-to-top Button */
+.scroll-top-btn {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 60;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  transition: opacity 0.2s, transform 0.2s;
+  align-items: center;
+  justify-content: center;
+}
+.scroll-top-btn.visible { display: flex; }
+.scroll-top-btn:hover { background: var(--surface2); transform: scale(1.1); }
+
+/* Hours Input */
+.hours-field { display: flex; align-items: center; gap: 4px; }
+.hours-field input {
+  width: 60px; text-align: right; font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; padding: 8px 6px;
+}
+.hours-field .unit { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.day-card-field .hours-field input { font-size: 17px; padding: 10px 8px; width: 80px; }
+
+/* Period Summary Modal */
+.period-controls {
+  display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
+}
+.period-controls input[type="date"] {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 12px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 14px;
+  color-scheme: dark; flex: 1; min-width: 120px;
+}
+.period-controls span { font-size: 14px; color: var(--text-dim); }
+.period-result { margin-top: 8px; }
+.period-result-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.period-result-row:last-child { border: none; }
+.period-result-row .label { font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.period-result-row .value {
+  font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700;
+}
+.period-result-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px; background: var(--surface2); border-radius: 8px; margin-top: 8px;
+}
+.period-result-total .label { font-size: 14px; font-weight: 700; }
+.period-result-total .value {
+  font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: var(--accent);
+}
+
+/* Data Notice */
+.data-notice {
+  text-align: center; font-size: 11px; color: var(--text-dim);
+  padding: 12px; margin-top: 16px; margin-bottom: 80px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.data-notice .warn { color: var(--warning); }
+
+/* PC版：配達入力の横スクロール対応 */
+#tab-delivery .input-section { overflow-x: auto; }
+#deliveryHeader .input-row, #inputRows .input-row { min-width: max-content; }
+
+/* Floating Button: PC版非表示 */
+.floating-today-btn { display: none; }
+
+/* PC版：カード非表示 */
+.day-card { display: none; }
+
+@media (max-width: 768px) {
+  /* スマホ：配達入力 グリッド→カード */
+  .input-row { display: none !important; }
+  .day-card { display: block; }
+
+  /* フローティングボタンに隠れないよう下部余白 */
+  .tab-content.active { padding-bottom: 80px; }
+
+  /* サマリー：1列縦積み */
+  .summary-grid { grid-template-columns: 1fr; }
+  .summary-value { font-size: 24px; }
+  .summary-sub { font-size: 11px; }
+
+  /* タブバー：2×2グリッド */
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-bottom: none;
+  }
+  .tab {
+    white-space: nowrap;
+    padding: 10px 8px;
+    font-size: 12px;
+    text-align: center;
+    border-bottom: 2px solid var(--border);
+  }
+  .tab.active { border-bottom-color: var(--accent); }
+
+  /* その他収入・本業収入カード：1列 */
+  .side-grid { grid-template-columns: 1fr; }
+
+  /* 振込スケジュールカード：1列 */
+  .payout-grid { grid-template-columns: 1fr; }
+  .payout-card { padding: 10px; }
+  .payout-card h3 { font-size: 12px; flex-wrap: wrap; }
+  .payout-row { font-size: 11px; grid-template-columns: 1fr 65px 75px; }
+  .payout-amount { font-size: 12px; }
+
+  /* 振込目標：縦積み */
+  .payout-goal-inputs { flex-direction: column; gap: 10px; }
+  .payout-goal-field { width: 100%; }
+
+  /* 臨時収入（自由入力）：縦積み */
+  .extra-item { flex-wrap: wrap; }
+  .extra-item input.extra-label { flex: 1 1 100%; }
+  .extra-item input.extra-amount { flex: 1; }
+
+  /* その他収入：スマホフォントサイズ */
+  #tab-extra .side-input-row input,
+  #tab-extra .extra-item input { font-size: 17px; }
+  #tab-mainJob .extra-item input { font-size: 17px; }
+
+  /* プログレスバー */
+  .progress-header { font-size: 12px; }
+  .breakdown { gap: 8px; }
+  .breakdown-item { font-size: 10px; }
+
+  /* 設定パネル：縦積み */
+  .settings-row { flex-wrap: wrap; }
+  .settings-row label { min-width: auto; width: 100%; margin-bottom: 4px; }
+  .settings-row input[type="number"],
+  .settings-row input.settings-amount { width: 100%; }
+  #monthlyTarget, #goalDayInput { font-size: 17px; }
+  .source-manager { padding: 12px; }
+  .source-item { flex-wrap: wrap; gap: 6px; }
+  .source-item input[type="text"] { flex: 1 1 calc(100% - 90px); }
+  .source-item select { width: 100%; margin-top: 4px; }
+  .payout-config { padding-left: 10px; }
+  .payout-type-radios { gap: 10px; flex-wrap: wrap; }
+  .payout-detail { margin-left: 0; padding-left: 8px; }
+  .payout-num-input { width: 52px !important; flex: 0 0 52px !important; }
+
+  /* 休日カレンダー */
+  .holiday-calendar { gap: 3px; }
+  .holiday-cell { font-size: 11px; border-radius: 6px; }
+  .holiday-info { gap: 10px; font-size: 11px; }
+
+  /* 各セクション共通：パディング縮小 */
+  .input-section, .payout-section, .settings-section, .holiday-section, .progress-section {
+    padding: 12px; border-radius: 8px;
+  }
+  .input-section h2, .payout-section h2 { font-size: 14px; }
+
+  /* ヘッダー */
+  .header h1 { font-size: 16px; }
+  .header-controls { gap: 6px; width: 100%; justify-content: flex-end; flex-wrap: nowrap; }
+  .btn { padding: 6px 12px; font-size: 12px; }
+  .month-selector { padding: 6px 10px; font-size: 13px; }
+  .header-controls .btn { padding: 10px 14px; font-size: 14px; min-height: 44px; flex-shrink: 0; }
+  .header-controls .btn-icon { padding: 0; width: 44px; min-height: 44px; font-size: 20px; flex-shrink: 0; }
+  .header-controls .month-selector { padding: 8px 10px; font-size: 14px; min-height: 44px; flex-shrink: 1; min-width: 120px; }
+
+  /* Scroll-to-top Button: スマホ */
+  .scroll-top-btn {
+    bottom: 80px;
+    right: 16px;
+    width: 46px;
+    height: 46px;
+    font-size: 22px;
+  }
+
+  /* Floating Button: スマホ表示 */
+  .floating-today-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    height: 48px;
+    padding: 0 28px;
+    border: none;
+    border-radius: 24px;
+    background: rgba(0, 212, 170, 0.9);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #000;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 212, 170, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+    white-space: nowrap;
+  }
+  .floating-today-btn:active {
+    transform: translateX(-50%) scale(0.95);
+    box-shadow: 0 2px 8px rgba(0, 212, 170, 0.25), 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  /* 日計モーダル：スマホ */
+  .dr-overlay { background: rgba(0,0,0,0.95); }
+  .dr-modal { max-width: 92vw; padding: 24px 20px 18px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>💰 収入管理ダッシュボード</h1>
+  <div class="header-controls">
+    <input type="month" id="monthSelector" class="month-selector">
+    <button class="btn" onclick="toggleHolidaySection()">📅 休日</button>
+    <button class="btn btn-icon" onclick="toggleSettings()" style="border-color:var(--rocket);color:var(--rocket);">⚙</button>
+    <button class="btn btn-icon" onclick="openPeriodSummary()" style="border-color:var(--warning);color:var(--warning);" title="期間集計">📊</button>
+    <button class="btn btn-icon" onclick="toggleHelp()" style="border-color:var(--accent);color:var(--accent);font-weight:700;">?</button>
+  </div>
+</div>
+<div style="text-align:right; font-size:11px; color:var(--text-dim); margin-top:-18px; margin-bottom:16px; padding-right:4px;">※ 入力内容は自動保存されます</div>
+
+<div class="settings-section" id="settingsSection" style="display:none;">
+  <div class="settings-row">
+    <label>目標金額（円）</label>
+    <input type="text" inputmode="numeric" id="monthlyTarget" class="settings-amount" value="0"
+      readonly style="opacity:0.7;cursor:default;"
+      title="支出項目の合計で自動計算されます">
+    <span style="font-size:12px; color:var(--text-dim);">円（支出合計で自動計算）</span>
+  </div>
+
+  <!-- 支出項目管理 -->
+  <div class="expense-manager" id="expenseManager">
+    <h3>📋 支出項目（月間目標の内訳）</h3>
+    <div id="expenseItemList"></div>
+    <div class="expense-total-row" id="expenseTotalRow">
+      <span class="total-label">合計（＝目標金額）</span>
+      <span class="total-value" id="expenseTotalValue">¥0</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button class="add-source-btn" onclick="addExpenseItem()">＋ 支出項目を追加</button>
+      <button class="add-source-btn" onclick="copyExpenseFromPrevMonth()" style="border-color:var(--rocket);color:var(--rocket);">📋 前月からコピー</button>
+    </div>
+  </div>
+  <div class="settings-row">
+    <label>目標日（毎月）</label>
+    <input type="number" id="goalDayInput" min="1" max="31" step="1" placeholder="25" onchange="onGoalDayChange(this.value)"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+    <span style="font-size:12px; color:var(--text-dim);">日</span>
+  </div>
+
+  <div class="settings-row">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:auto;">
+      <input type="checkbox" id="showMainJob" checked onchange="onVisibilityChange()" style="width:20px;height:20px;accent-color:var(--accent);">
+      💼 本業収入を表示
+    </label>
+  </div>
+  <div class="settings-row">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:auto;">
+      <input type="checkbox" id="showExtra" checked onchange="onVisibilityChange()" style="width:20px;height:20px;accent-color:var(--accent);">
+      🎁 その他収入を表示
+    </label>
+  </div>
+
+  <div class="settings-row">
+    <button class="btn btn-danger" onclick="clearMonth()">🗑️ 今月のデータをリセット</button>
+  </div>
+
+  <!-- 配達業者の管理 -->
+  <div class="source-manager" id="companyManager">
+    <h3>配達業者の管理</h3>
+    <div class="source-list" id="companyList">
+      <!-- JSで動的生成 -->
+    </div>
+    <button class="add-source-btn" onclick="addSource('company')">＋ 業者を追加</button>
+  </div>
+
+  <!-- その他収入の管理 -->
+  <div class="source-manager" id="extraManager">
+    <h3>その他収入の管理</h3>
+    <div class="source-list" id="extraFixedList">
+      <!-- JSで動的生成 -->
+    </div>
+    <button class="add-source-btn" onclick="addSource('extra')">＋ その他を追加</button>
+  </div>
+</div>
+
+<!-- Summary -->
+<div class="summary-grid" id="summaryGrid"></div>
+
+<!-- Progress -->
+<div class="progress-section">
+  <div class="progress-header">
+    <span>月間進捗（全収入合計）</span>
+    <span style="display:flex;align-items:center;gap:8px;">
+      <span id="paceIndicator"></span>
+      <span id="progressLabel" class="mono">0%</span>
+    </span>
+  </div>
+  <div class="progress-bar-bg">
+    <div class="progress-stacked" id="progressStacked"></div>
+  </div>
+  <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:11px; color:var(--text-dim);">
+    <span>¥0</span>
+    <span id="progressTarget" class="mono"></span>
+  </div>
+  <div class="breakdown" id="progressBreakdown"></div>
+</div>
+
+<!-- Holiday Calendar -->
+<div class="holiday-section" id="holidaySection" style="display:none;">
+  <div class="holiday-header" onclick="toggleHolidayBody()">
+    <h2>📅 休日設定 <span style="font-size:12px; font-weight:400;">（タップで休日を指定）</span></h2>
+    <span class="arrow open" id="holidayArrow">▼</span>
+  </div>
+  <div class="holiday-body" id="holidayBody">
+    <div class="holiday-info" id="holidayInfo"></div>
+    <div class="holiday-calendar" id="holidayCalendar"></div>
+    <div class="holiday-legend" id="holidayLegend">
+      <div class="holiday-legend-item"><span class="holiday-legend-swatch" style="background:var(--danger);"></span>休日</div>
+      <div class="holiday-legend-item"><span class="holiday-legend-swatch" style="background:#333;opacity:0.5;"></span>目標日までに振込なし</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('delivery')">🚴 配達売上</div>
+  <div class="tab" id="tabMainJob" onclick="switchTab('mainJob')">💼 本業収入</div>
+  <div class="tab" id="tabExtra" onclick="switchTab('extra')">🎁 その他収入</div>
+  <div class="tab" onclick="switchTab('payout')">💰 振込スケジュール</div>
+</div>
+
+<!-- Tab: Delivery -->
+<div class="tab-content active" id="tab-delivery">
+  <div class="input-section">
+    <h2>📝 日別配達売上</h2>
+    <div id="deliveryHeader"></div>
+    <div id="inputRows"></div>
+  </div>
+
+</div>
+
+<!-- Tab: Main Job Income -->
+<div class="tab-content" id="tab-mainJob">
+  <div class="input-section">
+    <h2>💼 本業収入</h2>
+    <button class="btn" onclick="addMainJobItem()" style="margin-bottom:12px;">＋ 追加</button>
+    <div class="extra-list" id="mainJobList"></div>
+  </div>
+</div>
+
+<!-- Tab: Extra Income -->
+<div class="tab-content" id="tab-extra">
+  <div class="input-section">
+    <h2>🎁 その他収入</h2>
+    <div class="side-grid" id="extraFixedGrid"></div>
+    <h2 style="margin-top:20px;">📝 臨時収入（自由入力）</h2>
+    <button class="btn" onclick="addExtraItem()" style="margin-bottom:12px;">＋ 追加</button>
+    <div class="extra-list" id="extraList"></div>
+  </div>
+</div>
+
+<!-- Tab: Payout -->
+<div class="tab-content" id="tab-payout">
+  <div class="payout-section">
+    <h2>💰 振込スケジュール</h2>
+    <div class="payout-grid" id="payoutGrid"></div>
+  </div>
+</div>
+
+<button class="floating-today-btn" onclick="scrollToToday()">📝 本日の入力</button>
+<button class="scroll-top-btn" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="ページ上部へ">↑</button>
+
+<!-- Daily Result Modal -->
+<div class="dr-overlay" id="drOverlay" onclick="if(event.target===this)closeDailyResult()">
+  <div class="dr-modal">
+    <button class="dr-close" onclick="closeDailyResult()">✕</button>
+    <div class="dr-date" id="drDate"></div>
+    <div class="dr-items" id="drItems"></div>
+    <hr class="dr-divider">
+    <div class="dr-total">
+      <div class="dr-total-label">合計</div>
+      <div class="dr-total-amount" id="drTotal"></div>
+    </div>
+    <div class="dr-brand">💰 収入管理ダッシュボード</div>
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div class="dr-overlay" id="helpOverlay" onclick="if(event.target===this)toggleHelp()">
+  <div class="dr-modal" style="max-height:85vh;overflow-y:auto;width:440px;">
+    <button class="dr-close" onclick="toggleHelp()">✕</button>
+    <div class="dr-date" style="font-size:18px;">📖 使い方ガイド</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.8;">
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">基本の使い方</div>
+        <div>1. 🚴 <b>配達売上タブ</b>で日々の売上を入力</div>
+        <div>2. ⚙️ <b>設定</b>で月間目標額を設定</div>
+        <div>3. 📅 <b>休日</b>で休みの日をタップ</div>
+        <div>4. 進捗バーとサマリーが自動で更新されます</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">データの保存について</div>
+        <div>入力した内容はすべて<b>自動保存</b>されます。</div>
+        <div>データはこの端末のブラウザ内に保存されます。</div>
+        <div style="color:var(--warning);margin-top:4px;">⚠ ブラウザのデータを消去すると入力内容も消えますのでご注意ください</div>
+        <div style="color:var(--warning);margin-top:4px;">⚠ iPhoneでホーム画面のアイコンを削除するとデータも消える場合があります。アイコンを削除しないでください</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">📱 ホーム画面に追加する方法</div>
+        <div style="font-size:12px;color:var(--accent);font-weight:700;margin-bottom:4px;">▼ iPhone（Safari）</div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-top:4px;">
+          <div style="margin-bottom:8px;"><b>Step 1.</b> <b>Safari</b>でこのページを開く</div>
+          <div style="margin-bottom:8px;"><b>Step 2.</b> 画面下部の <b>共有ボタン</b>（□に↑のアイコン）をタップ</div>
+          <div style="margin-bottom:8px;"><b>Step 3.</b> メニューを上にスクロールして<br>　「<b>ホーム画面に追加</b>」をタップ</div>
+          <div><b>Step 4.</b> 右上の「<b>追加</b>」をタップ</div>
+        </div>
+        <div style="color:var(--text-dim);font-size:11px;margin-top:4px;">※ iPhoneではChrome等からは追加できません。必ずSafariをお使いください。</div>
+        <div style="font-size:12px;color:var(--accent);font-weight:700;margin:10px 0 4px;">▼ Android（Chrome）</div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-top:4px;">
+          <div style="margin-bottom:8px;"><b>Step 1.</b> <b>Chrome</b>でこのページを開く</div>
+          <div style="margin-bottom:8px;"><b>Step 2.</b> 右上の <b>︙</b>（メニューボタン）をタップ</div>
+          <div><b>Step 3.</b> 「<b>ホーム画面に追加</b>」または「<b>アプリをインストール</b>」をタップ</div>
+        </div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">💡 便利な機能</div>
+        <div>・「<b>日計</b>」ボタンで1日の内訳をカード表示</div>
+        <div>・⚙️ 設定で<b>配達業者の追加・並び替え</b>が可能</div>
+        <div>・本業収入・その他収入は<b>表示/非表示</b>を切り替え可能</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">⛽ ガソリン代</div>
+        <div>各日の入力欄にガソリン代を入力できます</div>
+        <div>実質収入（配達収入 − ガソリン代）がサマリーに表示されます</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">⏱ 稼働時間</div>
+        <div>各日の入力欄に稼働時間を入力すると<b>時給換算</b>が表示されます</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">📊 期間集計</div>
+        <div>ヘッダーの📊ボタンで任意の期間の売上を集計できます</div>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:12px;">
+        v1.1 収入管理ダッシュボード
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Period Summary Modal -->
+<div class="dr-overlay" id="periodOverlay" onclick="if(event.target===this)closePeriodSummary()">
+  <div class="dr-modal" style="max-height:85vh;overflow-y:auto;width:440px;">
+    <button class="dr-close" onclick="closePeriodSummary()">✕</button>
+    <div class="dr-date" style="font-size:18px;">📊 期間集計</div>
+    <div class="period-controls">
+      <input type="date" id="periodStart" onchange="calcPeriodSummary()">
+      <span>〜</span>
+      <input type="date" id="periodEnd" onchange="calcPeriodSummary()">
+    </div>
+    <div id="periodResult"></div>
+  </div>
+</div>
+
+<!-- Data Notice -->
+<div class="data-notice">
+  💾 データはこの端末のブラウザに保存されています<br>
+  <span class="warn">⚠ ブラウザのデータ消去・シークレットモード・端末変更でデータは消えますのでご注意ください</span><br>
+  <span class="warn">⚠ iPhoneでホーム画面のアイコンを削除するとデータも消える場合があります。アイコンを削除しないでください</span>
+</div>
+
+<div class="toast" id="toast">保存しました</div>
+
+<script>
+const DEFAULT_COMPANIES = [
+  { id: 'uber', name: 'UberEats', color: '#06C167' },
+  { id: 'demae', name: '出前館', color: '#e8452e' },
+  { id: 'rocket', name: 'ロケットナウ', color: '#5b8def' },
+  { id: 'menu', name: 'menu', color: '#f5a623' },
+];
+
+const DEFAULT_EXTRA_FIXED = [];
+
+// --- 業者設定の読み書き ---
+function loadCompanies() {
+  const saved = localStorage.getItem('dd_companies');
+  return saved ? JSON.parse(saved) : structuredClone(DEFAULT_COMPANIES);
+}
+function loadExtraFixed() {
+  const saved = localStorage.getItem('dd_extra_fixed');
+  return saved ? JSON.parse(saved) : structuredClone(DEFAULT_EXTRA_FIXED);
+}
+function saveCompanies(arr) { localStorage.setItem('dd_companies', JSON.stringify(arr)); }
+function saveExtraFixed(arr) { localStorage.setItem('dd_extra_fixed', JSON.stringify(arr)); }
+
+const MAIN_JOB_COLOR = '#4a90d9';
+
+let COMPANIES = loadCompanies();
+let EXTRA_FIXED = loadExtraFixed();
+
+const DOW_JP = ['日','月','火','水','木','金','土'];
+let currentMonth = '';
+let data = {};
+
+// ============ HELP MODAL ============
+function toggleHelp() {
+  const o = document.getElementById('helpOverlay');
+  o.classList.toggle('open');
+}
+
+// ============ VISIBILITY TOGGLE ============
+function loadVisibility() {
+  try {
+    const saved = localStorage.getItem('dd_visibility');
+    if (saved) {
+      const v = JSON.parse(saved);
+      document.getElementById('showMainJob').checked = v.mainJob !== false;
+      document.getElementById('showExtra').checked = v.extra !== false;
+    }
+  } catch(e) {}
+  applyVisibility();
+}
+
+function onVisibilityChange() {
+  const v = {
+    mainJob: document.getElementById('showMainJob').checked,
+    extra: document.getElementById('showExtra').checked
+  };
+  localStorage.setItem('dd_visibility', JSON.stringify(v));
+  applyVisibility();
+  recalcAll();
+}
+
+function applyVisibility() {
+  const showMJ = document.getElementById('showMainJob').checked;
+  const showEx = document.getElementById('showExtra').checked;
+  // タブ
+  const tabMJ = document.getElementById('tabMainJob');
+  const tabEx = document.getElementById('tabExtra');
+  if (tabMJ) tabMJ.style.display = showMJ ? '' : 'none';
+  if (tabEx) tabEx.style.display = showEx ? '' : 'none';
+  // タブコンテンツ（非表示タブがアクティブなら配達に戻す）
+  const contentMJ = document.getElementById('tab-mainJob');
+  const contentEx = document.getElementById('tab-extra');
+  if (!showMJ && contentMJ && contentMJ.classList.contains('active')) {
+    contentMJ.classList.remove('active');
+    if (tabMJ) tabMJ.classList.remove('active');
+    document.querySelector('.tab').classList.add('active');
+    document.getElementById('tab-delivery').classList.add('active');
+  }
+  if (!showEx && contentEx && contentEx.classList.contains('active')) {
+    contentEx.classList.remove('active');
+    if (tabEx) tabEx.classList.remove('active');
+    document.querySelector('.tab').classList.add('active');
+    document.getElementById('tab-delivery').classList.add('active');
+  }
+}
+
+function isMainJobVisible() { return document.getElementById('showMainJob').checked; }
+function isExtraVisible() { return document.getElementById('showExtra').checked; }
+
+// ============ INIT ============
+function init() {
+  const now = new Date();
+  currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('monthSelector').value = currentMonth;
+  document.getElementById('monthSelector').addEventListener('change', (e) => {
+    currentMonth = e.target.value;
+    render();
+  });
+  loadData();
+  loadVisibility();
+  renderSourceManager();
+  renderExpenseItems();
+  render();
+}
+
+// ============ STORAGE ============
+function getMonthData() {
+  if (!data[currentMonth]) data[currentMonth] = { daily: {}, side: {}, extraFixed: {}, extraItems: [], mainJobItems: [], holidays: [], hours: {}, gas: {} };
+  const md = data[currentMonth];
+  if (!md.holidays) md.holidays = [];
+  if (!md.hours) md.hours = {};
+  if (!md.gas) md.gas = {};
+  return md;
+}
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem('income_dashboard_v2');
+    if (saved) data = JSON.parse(saved);
+  } catch(e) { data = {}; }
+  // 目標金額は月別データから読み込み（render時に設定）
+}
+
+function saveData() {
+  localStorage.setItem('income_dashboard_v2', JSON.stringify(data));
+}
+
+// ============ EXPENSE ITEMS (個人版・月別) ============
+function loadExpenseItems() {
+  const md = getMonthData();
+  return md.expenseItems || [];
+}
+
+function saveExpenseItems(items) {
+  const md = getMonthData();
+  md.expenseItems = items;
+  saveData();
+}
+
+function renderExpenseItems() {
+  const items = loadExpenseItems();
+  const container = document.getElementById('expenseItemList');
+  if (!container) return;
+  container.innerHTML = items.map((item, i) => `
+    <div class="expense-item">
+      <input type="text" class="expense-name" lang="ja" value="${(item.name || '').replace(/"/g, '&quot;')}" placeholder="項目名"
+        onchange="updateExpenseItem(${i}, 'name', this.value)">
+      <input type="text" inputmode="numeric" class="expense-amount" value="${item.amount ? Number(item.amount).toLocaleString() : ''}" placeholder="0"
+        onfocus="onExpenseFocus(this)" onblur="onExpenseBlur(this, ${i})"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+      <span style="font-size:12px;color:var(--text-dim);white-space:nowrap;">円</span>
+      <button class="remove-btn" onclick="removeExpenseItem(${i})">✕</button>
+    </div>
+  `).join('');
+  updateExpenseTotal();
+}
+
+function onExpenseFocus(el) {
+  const raw = String(el.value).replace(/,/g, '');
+  el.value = raw === '0' ? '' : raw;
+  el.select();
+}
+
+function onExpenseBlur(el, index) {
+  const v = parseInt(String(el.value).replace(/,/g, '')) || 0;
+  el.value = v ? v.toLocaleString() : '';
+  updateExpenseItem(index, 'amount', v);
+}
+
+function addExpenseItem() {
+  const items = loadExpenseItems();
+  items.push({ name: '', amount: 0 });
+  saveExpenseItems(items);
+  renderExpenseItems();
+}
+
+function copyExpenseFromPrevMonth() {
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  const prevM = cm === 1 ? 12 : cm - 1;
+  const prevY = cm === 1 ? cy - 1 : cy;
+  const prevKey = `${prevY}-${String(prevM).padStart(2, '0')}`;
+  const prevData = data[prevKey];
+  if (!prevData || !prevData.expenseItems || prevData.expenseItems.length === 0) {
+    alert('前月の支出項目がありません');
+    return;
+  }
+  const current = loadExpenseItems();
+  if (current.length > 0 && !confirm('現在の支出項目を上書きしますか？')) return;
+  const copied = prevData.expenseItems.map(item => ({ name: item.name, amount: item.amount }));
+  saveExpenseItems(copied);
+  renderExpenseItems();
+}
+
+function updateExpenseItem(index, field, value) {
+  const items = loadExpenseItems();
+  if (!items[index]) return;
+  items[index][field] = value;
+  saveExpenseItems(items);
+  updateExpenseTotal();
+}
+
+function removeExpenseItem(index) {
+  const items = loadExpenseItems();
+  items.splice(index, 1);
+  saveExpenseItems(items);
+  renderExpenseItems();
+}
+
+function updateExpenseTotal() {
+  const items = loadExpenseItems();
+  const total = items.reduce((sum, item) => sum + (parseInt(item.amount) || 0), 0);
+  const totalEl = document.getElementById('expenseTotalValue');
+  if (totalEl) totalEl.textContent = `¥${total.toLocaleString()}`;
+  // 目標金額に反映
+  const targetEl = document.getElementById('monthlyTarget');
+  if (targetEl) {
+    targetEl.value = total ? total.toLocaleString() : '';
+  }
+  recalcAll();
+  saveData();
+}
+
+// ============ PAYOUT GREYOUT LOGIC (個人版) ============
+function getPayoutDateForDay(workDay, y, m, co) {
+  const cfg = resolvePayoutConfig(co);
+  if (cfg.type === 'instant') return null; // null = always OK
+
+  if (cfg.type === 'weekly') {
+    const cutDow = cfg.cutoffDow ?? 0;
+    const payDow = cfg.payDow ?? cutDow;
+    // workDayの曜日を取得
+    const workDate = new Date(y, m - 1, workDay);
+    const wdDow = workDate.getDay();
+    // 次の締め曜日を探す
+    let daysUntilCut = cutDow - wdDow;
+    if (daysUntilCut < 0) daysUntilCut += 7;
+    if (daysUntilCut === 0 && wdDow === cutDow) daysUntilCut = 0; // 当日が締め日
+    const cutDate = new Date(workDate);
+    cutDate.setDate(cutDate.getDate() + daysUntilCut);
+    // 締め日から振込曜日を計算
+    let daysUntilPay = payDow - cutDow;
+    if (daysUntilPay <= 0) daysUntilPay += 7;
+    const payDate = new Date(cutDate);
+    payDate.setDate(payDate.getDate() + daysUntilPay);
+    return payDate;
+  }
+
+  if (cfg.type === 'monthly') {
+    const cutDay = cfg.cutoffDay ?? 31;
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const effectiveCut = Math.min(cutDay, daysInMonth);
+
+    if (cutDay < 28) {
+      // 2分割: 前半(1〜cutDay)と後半(cutDay+1〜月末)
+      if (workDay <= effectiveCut) {
+        // 前半: 振込は翌月payDay or 締め後X営業日
+        if (cfg.payDay) {
+          return new Date(y, m, cfg.payDay); // 翌月payDay日
+        } else if (cfg.payBusinessDays) {
+          return addBusinessDays(new Date(y, m - 1, effectiveCut), cfg.payBusinessDays);
+        } else {
+          return new Date(y, m, 0); // 月末
+        }
+      } else {
+        // 後半: 振込は翌々月payDay or 月末締め後X営業日
+        if (cfg.payDay) {
+          return new Date(y, m + 1, cfg.payDay); // 翌々月payDay日
+        } else if (cfg.payBusinessDays) {
+          return addBusinessDays(new Date(y, m - 1, daysInMonth), cfg.payBusinessDays);
+        } else {
+          return new Date(y, m + 1, 0);
+        }
+      }
+    } else {
+      // 月末締め → 翌月payDay or 翌月末 or 締め後X営業日
+      if (cfg.payDay) {
+        return new Date(y, m, cfg.payDay);
+      } else if (cfg.payBusinessDays) {
+        return addBusinessDays(new Date(y, m - 1, daysInMonth), cfg.payBusinessDays);
+      } else {
+        return new Date(y, m + 1, 0);
+      }
+    }
+  }
+
+  return null; // unknown → OK
+}
+
+function isDayGreyedOut(workDay, y, m, goalDate) {
+  if (!goalDate || COMPANIES.length === 0) return false;
+  // instant以外の会社で判定（instantは常にOKなので除外）
+  const nonInstant = COMPANIES.filter(co => {
+    const cfg = resolvePayoutConfig(co);
+    return cfg.type !== 'instant';
+  });
+  // instant以外の会社がなければグレーにしない
+  if (nonInstant.length === 0) return false;
+  // nonInstantの全社で目標日に間に合わないときだけグレー
+  for (const co of nonInstant) {
+    const payDate = getPayoutDateForDay(workDay, y, m, co);
+    if (payDate === null) continue; // safety
+    if (payDate <= goalDate) return false; // この会社は間に合う
+  }
+  return true; // 全社アウト
+}
+
+function getGoalDateForMonth(y, m, goalDay) {
+  if (!goalDay || goalDay <= 0) {
+    // 月末基準
+    return new Date(y, m, 0); // 当月末日
+  }
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const effectiveDay = Math.min(goalDay, daysInMonth);
+  return new Date(y, m - 1, effectiveDay);
+}
+
+function clearMonth() {
+  if (confirm(`${currentMonth} のデータをリセットしますか？`)) {
+    delete data[currentMonth];
+    saveData();
+    render();
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function toggleSettings() {
+  const s = document.getElementById('settingsSection');
+  const wasOpen = s.style.display !== 'none';
+  s.style.display = wasOpen ? 'none' : 'block';
+  if (wasOpen) { recalcAll(); saveData(); }
+}
+
+// ============ HOLIDAYS ============
+function toggleHolidaySection() {
+  const s = document.getElementById('holidaySection');
+  s.style.display = s.style.display === 'none' ? 'block' : 'none';
+  if (s.style.display === 'block') renderHolidayCalendar();
+}
+
+function toggleHolidayBody() {
+  const body = document.getElementById('holidayBody');
+  const arrow = document.getElementById('holidayArrow');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    arrow.classList.add('open');
+  } else {
+    body.style.display = 'none';
+    arrow.classList.remove('open');
+  }
+}
+
+function renderHolidayCalendar() {
+  const cal = document.getElementById('holidayCalendar');
+  const info = document.getElementById('holidayInfo');
+  if (!cal) return;
+
+  const md = getMonthData();
+  const days = getDaysInMonth(currentMonth);
+  const [y, m] = currentMonth.split('-').map(Number);
+  const firstDow = new Date(y, m - 1, 1).getDay();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m;
+  const todayDate = isCurrentMonth ? today.getDate() : 0;
+
+  let html = ['日','月','火','水','木','金','土'].map((d, i) =>
+    `<div class="holiday-dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${d}</div>`
+  ).join('');
+
+  for (let i = 0; i < firstDow; i++) {
+    html += '<div class="holiday-cell empty"></div>';
+  }
+
+  // 振込グレーアウト判定用
+  const goalDay = md.payoutGoalDay || 0;
+  const goalDate = getGoalDateForMonth(y, m, goalDay);
+
+  for (let d = 1; d <= days; d++) {
+    const isHoliday = md.holidays.includes(d);
+    const isToday = isCurrentMonth && d === todayDate;
+    const dow = new Date(y, m - 1, d).getDay();
+    const greyed = isDayGreyedOut(d, y, m, goalDate);
+    const cls = ['holiday-cell'];
+    if (isHoliday) cls.push('holiday');
+    if (isToday) cls.push('today');
+    if (dow === 0) cls.push('sun-col');
+    if (dow === 6) cls.push('sat-col');
+    if (greyed) cls.push('no-payout');
+    html += `<div class="${cls.join(' ')}" onclick="toggleHoliday(${d})">${d}</div>`;
+  }
+
+  cal.innerHTML = html;
+
+  const holidayCount = md.holidays.length;
+  const futureHolidays = isCurrentMonth ? md.holidays.filter(h => h > todayDate).length : holidayCount;
+  const remainingDays = isCurrentMonth ? Math.max(0, days - todayDate) : days;
+  const remainingWorkDays = Math.max(0, remainingDays - futureHolidays);
+
+  info.innerHTML = `
+    <div>休日: <span class="val" style="color:var(--danger)">${holidayCount}日</span></div>
+    <div>残り稼働日: <span class="val" style="color:var(--success)">${remainingWorkDays}日</span></div>
+  `;
+}
+
+function toggleHoliday(day) {
+  const md = getMonthData();
+  const idx = md.holidays.indexOf(day);
+  if (idx >= 0) {
+    md.holidays.splice(idx, 1);
+  } else {
+    md.holidays.push(day);
+    md.holidays.sort((a, b) => a - b);
+  }
+  renderHolidayCalendar();
+  updateDeliveryOffDays();
+  recalcAll();
+  saveData();
+}
+
+function updateDeliveryOffDays() {
+  const md = getMonthData();
+  const days = getDaysInMonth(currentMonth);
+  const rows = document.querySelectorAll('#inputRows .input-row');
+  for (let i = 0; i < rows.length && i < days; i++) {
+    const d = i + 1;
+    if (md.holidays.includes(d)) {
+      rows[i].classList.add('off-day');
+    } else {
+      rows[i].classList.remove('off-day');
+    }
+  }
+}
+
+// ============ TABS ============
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+// ============ DATE UTILS ============
+function getDaysInMonth(ym) { const [y,m] = ym.split('-').map(Number); return new Date(y, m, 0).getDate(); }
+function getDow(ym, day) { const [y,m] = ym.split('-').map(Number); return new Date(y, m-1, day).getDay(); }
+
+function getPaymentDate(ym) {
+  const md = getMonthData();
+  const goalDay = md.payoutGoalDay || 0;
+  if (goalDay <= 0) return null;
+  const [y,m] = ym.split('-').map(Number);
+  const maxDay = new Date(y, m, 0).getDate();
+  let payDay = Math.min(goalDay, maxDay);
+  let d = new Date(y, m-1, payDay);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function addBusinessDays(date, days) {
+  let d = new Date(date); let count = 0;
+  while (count < days) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
+  return d;
+}
+
+function formatDate(d) { return `${d.getMonth()+1}/${d.getDate()}(${DOW_JP[d.getDay()]})`; }
+
+// ============ RENDER ============
+function render() {
+  const md = getMonthData();
+  const gdi = document.getElementById('goalDayInput');
+  if (gdi) gdi.value = md.payoutGoalDay || '';
+  // 月別の支出項目を読み込み→目標金額に反映
+  renderExpenseItems();
+  renderDeliveryRows();
+  renderMainJobIncome();
+  renderExtraIncome();
+  renderHolidayCalendar();
+  recalcAll();
+}
+
+function renderDeliveryRows() {
+  const container = document.getElementById('inputRows');
+  const headerEl = document.getElementById('deliveryHeader');
+  container.innerHTML = '';
+  const md = getMonthData();
+  if (!md.daily) md.daily = {};
+  const days = getDaysInMonth(currentMonth);
+  const colCount = COMPANIES.length;
+  const gridCols = `80px ${Array(colCount).fill('minmax(90px, 1fr)').join(' ')} 70px 70px 110px 54px`;
+
+  // 振込グレーアウト判定用
+  const [gy, gm] = currentMonth.split('-').map(Number);
+  const goalDay = md.payoutGoalDay || 0;
+  const goalDate = getGoalDateForMonth(gy, gm, goalDay);
+
+  // ヘッダー行（PC版のみ表示、スマホではCSSで非表示）
+  headerEl.innerHTML = `
+    <div class="input-row header-row" style="grid-template-columns: ${gridCols};">
+      <div>日付</div>
+      ${COMPANIES.map(co => `<div style="color:${co.color}">${co.name}</div>`).join('')}
+      <div>時間</div>
+      <div>⛽</div>
+      <div>合計</div>
+      <div></div>
+    </div>
+  `;
+
+  for (let d = 1; d <= days; d++) {
+    const dd = String(d).padStart(2, '0');
+    const dow = getDow(currentMonth, d);
+    if (!md.daily[dd]) md.daily[dd] = {};
+    const dowCls = dow === 6 ? 'sat' : (dow === 0 ? 'sun' : '');
+    const isHoliday = (md.holidays || []).includes(d);
+
+    // === PC版：グリッド行 ===
+    const row = document.createElement('div');
+    row.className = 'input-row';
+    row.style.gridTemplateColumns = gridCols;
+    row.innerHTML = `
+      <div class="date-label">${d}<span class="dow ${dowCls}">${DOW_JP[dow]}</span></div>
+      ${COMPANIES.map(co => {
+        const rawVal = md.daily[dd][co.id] || 0;
+        const dispVal = rawVal ? rawVal.toLocaleString() : '';
+        const payDate = goalDate ? getPayoutDateForDay(d, gy, gm, co) : null;
+        const isGrey = payDate !== null && goalDate && payDate > goalDate;
+        return `<input type="text" class="daily-input${isGrey ? ' no-payout-input' : ''}" inputmode="numeric" placeholder="0"
+          data-day="${dd}" data-co="${co.id}" data-type="daily"
+          value="${dispVal}" oninput="onDailyInput(this)"
+          onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"
+          onkeydown="onDailyKeydown(event)">`;
+      }).join('')}
+      <div class="hours-field">
+        <input type="number" step="0.5" min="0" max="24" placeholder="-"
+          data-day="${dd}" value="${md.hours[dd] || ''}"
+          oninput="onHoursInput(this)" onfocus="this.select()"
+          style="width:55px;font-size:13px;padding:6px 4px;">
+        <span class="unit">h</span>
+      </div>
+      <input type="text" inputmode="numeric" class="daily-input" placeholder="0"
+        data-day="${dd}" data-type="gas"
+        value="${md.gas[dd] ? md.gas[dd].toLocaleString() : ''}"
+        oninput="onGasInput(this)"
+        onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"
+        style="width:60px;font-size:13px;padding:6px 4px;color:var(--danger);">
+      <div class="day-total mono" id="total-${dd}">¥0</div>
+      <button class="daily-result-btn" id="dr-btn-${dd}" onclick="openDailyResult('${dd}')">日計</button>
+    `;
+    if (isHoliday) row.classList.add('off-day');
+    container.appendChild(row);
+
+    // === スマホ版：カード ===
+    const card = document.createElement('div');
+    card.className = 'day-card';
+    if (isHoliday) card.classList.add('off-day');
+    card.innerHTML = `
+      <div class="day-card-header">
+        <div class="date-label">${d}<span class="dow ${dowCls}">${DOW_JP[dow]}</span></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="daily-result-btn" id="dr-btn-m-${dd}" onclick="openDailyResult('${dd}')">日計</button>
+          <div class="day-total mono" id="total-m-${dd}">¥0</div>
+        </div>
+      </div>
+      <div class="day-card-inputs">
+        ${COMPANIES.map(co => {
+          const payDate = goalDate ? getPayoutDateForDay(d, gy, gm, co) : null;
+          const isGrey = payDate !== null && goalDate && payDate > goalDate;
+          return `
+          <div class="day-card-field${isGrey ? ' no-payout-field' : ''}">
+            <span class="field-dot" style="background:${co.color}"></span>
+            <span class="field-label">${co.name}</span>
+            <input type="text" class="daily-input" inputmode="numeric" placeholder="0"
+              data-day="${dd}" data-co="${co.id}" data-type="daily"
+              value="${(() => { const v = md.daily[dd][co.id] || 0; return v ? v.toLocaleString() : ''; })()}"
+              oninput="onDailyInput(this)" onfocus="onDailyFocus(this)"
+              onblur="onDailyBlur(this)" onkeydown="onDailyKeydown(event)">
+          </div>`;
+        }).join('')}
+        <div class="day-card-field">
+          <span class="field-dot" style="background:var(--text-dim)"></span>
+          <span class="field-label">稼働時間</span>
+          <div class="hours-field">
+            <input type="number" step="0.5" min="0" max="24" inputmode="decimal" placeholder="-"
+              data-day="${dd}" value="${md.hours[dd] || ''}"
+              oninput="onHoursInput(this)" onfocus="this.select()">
+            <span class="unit">h</span>
+          </div>
+        </div>
+        <div class="day-card-field">
+          <span class="field-dot" style="background:var(--danger)"></span>
+          <span class="field-label">ガソリン代</span>
+          <input type="text" class="daily-input" inputmode="numeric" placeholder="0"
+            data-day="${dd}" data-type="gas"
+            value="${md.gas[dd] ? md.gas[dd].toLocaleString() : ''}"
+            oninput="onGasInput(this)"
+            onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"
+            style="color:var(--danger);">
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  }
+}
+
+function renderMainJobIncome() {
+  const md = getMonthData();
+  if (!md.mainJobItems) md.mainJobItems = [];
+  renderMainJobItems();
+}
+
+function renderMainJobItems() {
+  const list = document.getElementById('mainJobList');
+  const md = getMonthData();
+  if (!md.mainJobItems) md.mainJobItems = [];
+
+  list.innerHTML = md.mainJobItems.map((item, i) => {
+    const amt = item.amount || 0;
+    const display = amt !== 0 ? amt.toLocaleString() : '';
+    return `
+    <div class="extra-item">
+      <input type="text" class="extra-label" placeholder="内容（例：給与）" value="${item.label || ''}"
+        data-mj-idx="${i}"
+        oninput="onMainJobItemInput(${i}, 'label', this.value)"
+        onkeydown="onMainJobKeydown(event)">
+      <input type="text" inputmode="numeric" class="extra-amount" placeholder="金額" value="${display}"
+        data-mj-idx="${i}"
+        oninput="onMainJobItemInput(${i}, 'amount', this.value)"
+        onfocus="onExtraAmountFocus(this)"
+        onblur="onExtraAmountBlur(this)"
+        onkeydown="onMainJobKeydown(event)">
+      <button class="remove-btn" onclick="removeMainJobItem(${i})">✕</button>
+    </div>
+  `;}).join('');
+}
+
+function onMainJobItemInput(i, field, val) {
+  const md = getMonthData();
+  if (field === 'amount') md.mainJobItems[i][field] = parseExtraValue(val);
+  else md.mainJobItems[i][field] = val;
+  recalcAll();
+  saveData();
+}
+
+function addMainJobItem() {
+  const md = getMonthData();
+  if (!md.mainJobItems) md.mainJobItems = [];
+  md.mainJobItems.push({ label: '', amount: 0 });
+  renderMainJobItems();
+  saveData();
+}
+
+function removeMainJobItem(i) {
+  const md = getMonthData();
+  md.mainJobItems.splice(i, 1);
+  renderMainJobItems();
+  recalcAll();
+  saveData();
+}
+
+function onMainJobKeydown(e) {
+  const el = e.target;
+  const isAmount = el.classList.contains('extra-amount');
+
+  if (e.key === 'Enter' && window.innerWidth > 768) {
+    e.preventDefault();
+    const allInputs = Array.from(document.querySelectorAll('#tab-mainJob .extra-item input.extra-label, #tab-mainJob .extra-item input.extra-amount'));
+    const idx = allInputs.indexOf(el);
+    if (e.shiftKey) {
+      if (idx > 0) { el.blur(); allInputs[idx - 1].focus(); } else { el.blur(); }
+    } else if (idx >= 0 && idx < allInputs.length - 1) {
+      el.blur();
+      allInputs[idx + 1].focus();
+    } else {
+      el.blur();
+    }
+    return;
+  }
+
+  if (isAmount) {
+    const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+    if (allowed.includes(e.key)) return;
+    if ((e.ctrlKey || e.metaKey) && ['a','c','v','x','z'].includes(e.key.toLowerCase())) return;
+    if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+  }
+}
+
+function renderExtraIncome() {
+  const grid = document.getElementById('extraFixedGrid');
+  const md = getMonthData();
+  if (!md.extraFixed) md.extraFixed = {};
+  if (!md.extraItems) md.extraItems = [];
+
+  grid.innerHTML = EXTRA_FIXED.map(e => {
+    const val = md.extraFixed[e.id] || 0;
+    const display = val !== 0 ? val.toLocaleString() : '';
+    return `
+    <div class="side-card">
+      <h3><span class="payout-dot" style="background:${e.color}"></span>${e.name}</h3>
+      <div class="side-input-row">
+        <label>今月額</label>
+        <input type="text" inputmode="numeric" class="extra-amount" placeholder="0"
+          value="${display}"
+          data-extra-id="${e.id}"
+          oninput="onExtraFixedInput('${e.id}', this.value)"
+          onfocus="onExtraAmountFocus(this)"
+          onblur="onExtraAmountBlur(this)"
+          onkeydown="onExtraKeydown(event)">
+      </div>
+    </div>
+  `;}).join('');
+
+  renderExtraItems();
+}
+
+function renderExtraItems() {
+  const list = document.getElementById('extraList');
+  const md = getMonthData();
+  if (!md.extraItems) md.extraItems = [];
+
+  list.innerHTML = md.extraItems.map((item, i) => {
+    const amt = item.amount || 0;
+    const display = amt !== 0 ? amt.toLocaleString() : '';
+    return `
+    <div class="extra-item">
+      <input type="text" class="extra-label" placeholder="内容（例：単発バイト）" value="${item.label || ''}"
+        data-extra-idx="${i}"
+        oninput="onExtraItemInput(${i}, 'label', this.value)"
+        onkeydown="onExtraKeydown(event)">
+      <input type="text" inputmode="numeric" class="extra-amount" placeholder="金額" value="${display}"
+        data-extra-idx="${i}"
+        oninput="onExtraItemInput(${i}, 'amount', this.value)"
+        onfocus="onExtraAmountFocus(this)"
+        onblur="onExtraAmountBlur(this)"
+        onkeydown="onExtraKeydown(event)">
+      <button class="remove-btn" onclick="removeExtraItem(${i})">✕</button>
+    </div>
+  `;}).join('');
+}
+
+// ============ INPUT HANDLERS ============
+function parseDailyValue(str) {
+  return parseInt(String(str).replace(/,/g, '')) || 0;
+}
+
+function onDailyInput(el) {
+  const md = getMonthData();
+  const day = el.dataset.day, co = el.dataset.co;
+  if (!md.daily[day]) md.daily[day] = {};
+  md.daily[day][co] = parseDailyValue(el.value);
+  recalcAll();
+  saveData();
+}
+
+function onDailyFocus(el) {
+  const num = parseDailyValue(el.value);
+  el.value = num !== 0 ? String(num) : '';
+  setTimeout(() => el.select(), 0);
+}
+
+function onDailyBlur(el) {
+  const num = parseDailyValue(el.value);
+  el.value = num !== 0 ? num.toLocaleString() : '';
+}
+
+function onDailyKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const el = e.target;
+    if (!el.closest('.input-row')) return;
+    const allInputs = Array.from(document.querySelectorAll('#inputRows .input-row .daily-input'));
+    const idx = allInputs.indexOf(el);
+    if (e.shiftKey && window.innerWidth > 768) {
+      if (idx > 0) { el.blur(); allInputs[idx - 1].focus(); } else { el.blur(); }
+    } else if (idx >= 0 && idx < allInputs.length - 1) {
+      el.blur();
+      allInputs[idx + 1].focus();
+    } else {
+      el.blur();
+    }
+    return;
+  }
+  const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+  if (allowed.includes(e.key)) return;
+  if ((e.ctrlKey || e.metaKey) && ['a','c','v','x','z'].includes(e.key.toLowerCase())) return;
+  if (e.key === '-' && e.target.selectionStart === 0 && !e.target.value.includes('-')) return;
+  if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+}
+
+function parseExtraValue(str) {
+  return parseInt(String(str).replace(/,/g, '')) || 0;
+}
+
+function onExtraFixedInput(id, val) {
+  const md = getMonthData();
+  if (!md.extraFixed) md.extraFixed = {};
+  md.extraFixed[id] = parseExtraValue(val);
+  recalcAll();
+  saveData();
+}
+
+function onExtraItemInput(i, field, val) {
+  const md = getMonthData();
+  if (field === 'amount') md.extraItems[i][field] = parseExtraValue(val);
+  else md.extraItems[i][field] = val;
+  recalcAll();
+  saveData();
+}
+
+function onExtraAmountFocus(el) {
+  const num = parseExtraValue(el.value);
+  el.value = num !== 0 ? String(num) : '';
+  setTimeout(() => el.select(), 0);
+}
+
+function onExtraAmountBlur(el) {
+  const num = parseExtraValue(el.value);
+  el.value = num !== 0 ? num.toLocaleString() : '';
+}
+
+function onExtraKeydown(e) {
+  const el = e.target;
+  const isAmount = el.classList.contains('extra-amount');
+
+  // Enterキー：PC版のみセル移動（Shift+Enterで前へ）
+  if (e.key === 'Enter' && window.innerWidth > 768) {
+    e.preventDefault();
+    const allInputs = Array.from(document.querySelectorAll('#tab-extra .side-input-row input, #tab-extra .extra-item input.extra-label, #tab-extra .extra-item input.extra-amount'));
+    const idx = allInputs.indexOf(el);
+    if (e.shiftKey) {
+      if (idx > 0) { el.blur(); allInputs[idx - 1].focus(); } else { el.blur(); }
+    } else if (idx >= 0 && idx < allInputs.length - 1) {
+      el.blur();
+      allInputs[idx + 1].focus();
+    } else {
+      el.blur();
+    }
+    return;
+  }
+
+  // 金額欄のみ：入力制限（数字・操作キーのみ）
+  if (isAmount) {
+    const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+    if (allowed.includes(e.key)) return;
+    if ((e.ctrlKey || e.metaKey) && ['a','c','v','x','z'].includes(e.key.toLowerCase())) return;
+    if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+  }
+}
+
+function onTargetFocus(el) {
+  const num = parseInt(String(el.value).replace(/,/g, '')) || 0;
+  el.value = num !== 0 ? String(num) : '';
+  setTimeout(() => el.select(), 0);
+}
+
+function onTargetBlur(el) {
+  const num = parseInt(String(el.value).replace(/,/g, '')) || 0;
+  el.value = num.toLocaleString();
+  recalcAll();
+  saveData();
+}
+
+function onTargetKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.target.blur();
+    document.getElementById('goalDayInput').focus();
+    return;
+  }
+  const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+  if (allowed.includes(e.key)) return;
+  if ((e.ctrlKey || e.metaKey) && ['a','c','v','x','z'].includes(e.key.toLowerCase())) return;
+  if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+}
+
+function addExtraItem() {
+  const md = getMonthData();
+  if (!md.extraItems) md.extraItems = [];
+  md.extraItems.push({ label: '', amount: 0 });
+  renderExtraItems();
+}
+
+function removeExtraItem(i) {
+  const md = getMonthData();
+  md.extraItems.splice(i, 1);
+  renderExtraItems();
+  recalcAll();
+  saveData();
+}
+
+// ============ CARRYOVER (前月グレー分の繰り越し) ============
+function getCarryoverFromPrevMonth(curMonth) {
+  // 前月のグレー欄（目標日に間に合わなかった売上）を計算
+  const [cy, cm] = curMonth.split('-').map(Number);
+  const prevM = cm === 1 ? 12 : cm - 1;
+  const prevY = cm === 1 ? cy - 1 : cy;
+  const prevKey = `${prevY}-${String(prevM).padStart(2, '0')}`;
+  const prevData = data[prevKey];
+  if (!prevData || !prevData.daily) return 0;
+
+  const prevGoalDay = prevData.payoutGoalDay || 0;
+  const prevDays = new Date(prevY, prevM, 0).getDate();
+  const prevGoalDate = getGoalDateForMonth(prevY, prevM, prevGoalDay);
+  if (!prevGoalDate) return 0;
+
+  let carryover = 0;
+  for (let d = 1; d <= prevDays; d++) {
+    const dd = String(d).padStart(2, '0');
+    const dayData = prevData.daily[dd] || {};
+    COMPANIES.forEach(co => {
+      const amt = dayData[co.id] || 0;
+      if (amt > 0) {
+        const payDate = getPayoutDateForDay(d, prevY, prevM, co);
+        if (payDate !== null && payDate > prevGoalDate) {
+          carryover += amt;
+        }
+      }
+    });
+  }
+  return carryover;
+}
+
+// ============ CALC ============
+function recalcAll() {
+  const rawTarget = document.getElementById('monthlyTarget').value;
+  let target = rawTarget === '' ? 0 : (parseInt(String(rawTarget).replace(/,/g, '')) || 0);
+  if (target < 0) target = 0;
+  // 前月グレー分（翌月振込）を当月の売上に加算する
+  const carryover = getCarryoverFromPrevMonth(currentMonth);
+  const days = getDaysInMonth(currentMonth);
+  const today = new Date();
+  const [curY, curM] = currentMonth.split('-').map(Number);
+  const isCurrentMonth = today.getFullYear() === curY && today.getMonth() + 1 === curM;
+  const todayDate = isCurrentMonth ? today.getDate() : 0;
+  const md = getMonthData();
+
+  // Delivery totals（目標日に間に合わない売上を除外）
+  const goalDayCalc = md.payoutGoalDay || 0;
+  const goalDateCalc = getGoalDateForMonth(curY, curM, goalDayCalc);
+  let deliveryTotal = 0, deliveryTotalEffective = 0, daysWorked = 0;
+  for (let d = 1; d <= days; d++) {
+    const dd = String(d).padStart(2, '0');
+    const dayData = (md.daily || {})[dd] || {};
+    let dayTotal = 0, dayEffective = 0;
+    COMPANIES.forEach(co => {
+      const amt = dayData[co.id] || 0;
+      dayTotal += amt;
+      // 目標日に間に合うかチェック
+      if (goalDateCalc && amt > 0) {
+        const payDate = getPayoutDateForDay(d, curY, curM, co);
+        if (payDate === null || payDate <= goalDateCalc) {
+          dayEffective += amt; // 間に合う
+        }
+      } else {
+        dayEffective += amt;
+      }
+    });
+    deliveryTotal += dayTotal;
+    deliveryTotalEffective += dayEffective;
+    if (dayTotal > 0) daysWorked++;
+
+    const totalText = dayTotal > 0 ? `¥${dayTotal.toLocaleString()}` : '¥0';
+    const totalColor = dayTotal >= 12000 ? 'var(--success)' : dayTotal >= 10500 ? 'var(--text)' : dayTotal > 0 ? 'var(--warning)' : 'var(--text-dim)';
+    const totalFontSize = totalText.length >= 10 ? '13px' : totalText.length >= 9 ? '15px' : '';
+    const el = document.getElementById(`total-${dd}`);
+    if (el) { el.textContent = totalText; el.style.color = totalColor; el.style.fontSize = totalFontSize; }
+    const elM = document.getElementById(`total-m-${dd}`);
+    if (elM) { elM.textContent = totalText; elM.style.color = totalColor; elM.style.fontSize = totalFontSize; }
+
+    // 日計ボタン表示制御
+    const drBtn = document.getElementById(`dr-btn-${dd}`);
+    if (drBtn) { drBtn.classList.toggle('visible', dayTotal > 0); }
+    const drBtnM = document.getElementById(`dr-btn-m-${dd}`);
+    if (drBtnM) { drBtnM.classList.toggle('visible', dayTotal > 0); }
+  }
+
+  // Extra fixed total
+  let extraFixedTotal = 0;
+  EXTRA_FIXED.forEach(e => extraFixedTotal += ((md.extraFixed || {})[e.id] || 0));
+
+  // Extra items total
+  let extraItemsTotal = 0;
+  (md.extraItems || []).forEach(item => extraItemsTotal += (item.amount || 0));
+
+  const extraTotal = extraFixedTotal + extraItemsTotal;
+
+  // Main job income
+  let mainJobAmount = 0;
+  (md.mainJobItems || []).forEach(item => mainJobAmount += (item.amount || 0));
+
+  // Hours total
+  let totalHours = 0;
+  for (let d = 1; d <= days; d++) {
+    const dd = String(d).padStart(2, '0');
+    if (md.hours[dd]) totalHours += md.hours[dd];
+  }
+  totalHours = Math.round(totalHours * 10) / 10;
+  const hourlyRate = totalHours > 0 ? Math.round(deliveryTotal / totalHours) : 0;
+
+  // Gas total
+  let gasTotal = 0;
+  for (let d = 1; d <= days; d++) {
+    const dd = String(d).padStart(2, '0');
+    if (md.gas[dd]) gasTotal += md.gas[dd];
+  }
+  const netDelivery = deliveryTotal - gasTotal;
+
+  const grandTotal = deliveryTotal + mainJobAmount + extraTotal;
+  const grandTotalEffective = deliveryTotalEffective + mainJobAmount + extraTotal + carryover;
+  const remaining = Math.max(0, target - grandTotalEffective);
+
+  // 休日を除外した残り稼働日数を計算
+  const holidays = md.holidays || [];
+  const goalDay = md.payoutGoalDay || 0;
+  const hasGoalDay = goalDay > 0;
+  const endDay = hasGoalDay ? Math.min(goalDay, days) : days;
+
+  let futureHolidays, remainingDaysRaw;
+  if (isCurrentMonth) {
+    futureHolidays = holidays.filter(h => h > todayDate && h <= endDay).length;
+    remainingDaysRaw = Math.max(0, endDay - todayDate);
+  } else {
+    futureHolidays = holidays.filter(h => h <= endDay).length;
+    remainingDaysRaw = endDay;
+  }
+  let remainingWorkDays = Math.max(0, remainingDaysRaw - futureHolidays);
+
+  const dailyNeeded = remainingWorkDays > 0 ? Math.ceil(remaining / remainingWorkDays) : 0;
+  const avgPerDay = daysWorked > 0 ? Math.round(deliveryTotal / daysWorked) : 0;
+  const pct = target > 0 ? Math.min(999, Math.round(grandTotalEffective / target * 100)) : 0;
+
+  const payDate = getPaymentDate(currentMonth);
+  let payDateStr = '未設定';
+  let daysUntilPayLabel = '';
+  let daysUntilPaySub = '⚙で目標日を設定';
+  if (payDate) {
+    payDateStr = formatDate(payDate);
+    if (isCurrentMonth) {
+      const diff = Math.ceil((payDate - today) / (1000*60*60*24));
+      daysUntilPayLabel = diff > 0 ? `あと${diff}日` : (diff === 0 ? '今日！' : '経過済');
+      daysUntilPaySub = payDateStr;
+    } else {
+      daysUntilPayLabel = payDateStr;
+      daysUntilPaySub = '';
+    }
+  } else {
+    daysUntilPayLabel = '未設定';
+  }
+
+  const achieved = grandTotal >= target && target > 0;
+  const remainingLabel = achieved ? '達成！' : `¥${remaining.toLocaleString()}`;
+  const remainingColor = achieved ? 'var(--success)' : 'var(--danger)';
+
+  // Summary
+  const showMJ = isMainJobVisible();
+  const showEx = isExtraVisible();
+  const subParts = [`配達 ¥${deliveryTotal.toLocaleString()}`];
+  if (showMJ) subParts.push(`本業 ¥${mainJobAmount.toLocaleString()}`);
+  if (showEx) subParts.push(`他 ¥${extraTotal.toLocaleString()}`);
+
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="summary-card total">
+      <div class="summary-label">全収入合計</div>
+      <div class="summary-value" style="color:var(--accent)">¥${grandTotal.toLocaleString()}</div>
+      <div class="summary-sub">${subParts.join(' / ')}</div>
+    </div>
+    <div class="summary-card delivery">
+      <div class="summary-label">配達収入</div>
+      <div class="summary-value" style="color:var(--uber)">¥${deliveryTotal.toLocaleString()}</div>
+      <div class="summary-sub">${daysWorked}日稼働 / 日平均 ¥${avgPerDay.toLocaleString()}${totalHours > 0 ? ` / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>
+      ${gasTotal > 0 ? `<div class="summary-sub" style="color:var(--text-dim);">⛽ −¥${gasTotal.toLocaleString()} → 実質 ¥${netDelivery.toLocaleString()}</div>` : ''}
+    </div>
+    ${showMJ ? `<div class="summary-card" style="border-left:3px solid ${MAIN_JOB_COLOR};">
+      <div class="summary-label">本業収入</div>
+      <div class="summary-value" style="color:${MAIN_JOB_COLOR}">¥${mainJobAmount.toLocaleString()}</div>
+      <div class="summary-sub">${(md.mainJobItems || []).filter(it => it.amount).length}件入力済み</div>
+    </div>` : ''}
+    ${showEx ? `<div class="summary-card side">
+      <div class="summary-label">その他収入</div>
+      <div class="summary-value" style="color:var(--extra)">¥${extraTotal.toLocaleString()}</div>
+      <div class="summary-sub">固定 ¥${extraFixedTotal.toLocaleString()} / 臨時 ¥${extraItemsTotal.toLocaleString()}</div>
+    </div>` : ''}
+    <div class="summary-card payment">
+      <div class="summary-label">目標日まで</div>
+      <div class="summary-value" style="color:var(--rocket); font-size:20px;">${daysUntilPayLabel}</div>
+      <div class="summary-sub">${daysUntilPaySub}</div>
+    </div>
+    <div class="summary-card remaining">
+      <div class="summary-label">あと</div>
+      <div class="summary-value" style="color:${remainingColor}">${remainingLabel}</div>
+      <div class="summary-sub">目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}</div>
+    </div>
+    <div class="summary-card daily">
+      <div class="summary-label">日別目標</div>
+      <div class="summary-value" style="color:var(--warning)">¥${dailyNeeded.toLocaleString()}</div>
+      <div class="summary-sub">${hasGoalDay ? `目標日まで残り${remainingWorkDays}稼働日` : `残り${remainingWorkDays}稼働日（月末基準）`}</div>
+    </div>
+  `;
+
+  // Auto-size summary values for long amounts (7+ digits)
+  document.querySelectorAll('#summaryGrid .summary-value').forEach(el => {
+    if (el.style.fontSize) return;
+    const len = el.textContent.length;
+    const mob = window.innerWidth <= 768;
+    if (len >= 11) el.style.fontSize = (mob ? 16 : 20) + 'px';
+    else if (len >= 10) el.style.fontSize = (mob ? 18 : 24) + 'px';
+  });
+
+  // Progress bar (stacked)
+  const deliveryPct = target > 0 ? Math.min(100, deliveryTotalEffective / target * 100) : 0;
+  const carryoverPct = target > 0 ? Math.min(100 - deliveryPct, carryover / target * 100) : 0;
+  const mainJobPct = target > 0 ? Math.min(100 - deliveryPct - carryoverPct, mainJobAmount / target * 100) : 0;
+  const extraPct = target > 0 ? Math.min(100 - deliveryPct - carryoverPct - mainJobPct, extraTotal / target * 100) : 0;
+
+  document.getElementById('progressStacked').innerHTML = `
+    <div class="progress-segment" style="width:${deliveryPct}%; background:var(--uber);"></div>
+    ${carryover > 0 ? `<div class="progress-segment" style="width:${carryoverPct}%; background:var(--rocket);"></div>` : ''}
+    <div class="progress-segment" style="width:${mainJobPct}%; background:${MAIN_JOB_COLOR};"></div>
+    <div class="progress-segment" style="width:${extraPct}%; background:var(--extra);"></div>
+  `;
+  document.getElementById('progressLabel').textContent = `${pct}% (¥${grandTotalEffective.toLocaleString()})`;
+  const paceEl = document.getElementById('paceIndicator');
+  if (paceEl) {
+    let paceText, paceColor;
+    if (pct >= 100) {
+      paceText = '🎉 達成'; paceColor = '#ffd700';
+    } else if (remainingWorkDays <= 0) {
+      paceText = '❌ 未達'; paceColor = 'var(--danger)';
+    } else if (daysWorked > 0 && avgPerDay > 0) {
+      const ratio = dailyNeeded / avgPerDay;
+      if (ratio <= 1.3) { paceText = '📈 順調'; paceColor = 'var(--success)'; }
+      else if (ratio <= 2.0) { paceText = '⚠️ やや遅れ'; paceColor = 'var(--warning)'; }
+      else { paceText = '🔥 要加速'; paceColor = 'var(--danger)'; }
+    } else {
+      paceText = pct >= 70 ? '📈 順調' : pct >= 40 ? '⚠️ やや遅れ' : '🔥 要加速';
+      paceColor = pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--danger)';
+    }
+    paceEl.innerHTML = `<span style="color:${paceColor};font-weight:700;font-size:13px;">${paceText}</span>`;
+  }
+  document.getElementById('progressTarget').textContent = `¥${target.toLocaleString()}`;
+
+  let breakdownHtml = `<div class="breakdown-item"><div class="breakdown-dot" style="background:var(--uber)"></div>配達 ¥${deliveryTotalEffective.toLocaleString()}</div>`;
+  if (carryover > 0) breakdownHtml += `<div class="breakdown-item"><div class="breakdown-dot" style="background:var(--rocket)"></div>前月繰越 ¥${carryover.toLocaleString()}</div>`;
+  if (showMJ) breakdownHtml += `<div class="breakdown-item"><div class="breakdown-dot" style="background:${MAIN_JOB_COLOR}"></div>本業収入 ¥${mainJobAmount.toLocaleString()}</div>`;
+  if (showEx) breakdownHtml += `<div class="breakdown-item"><div class="breakdown-dot" style="background:var(--extra)"></div>その他 ¥${extraTotal.toLocaleString()}</div>`;
+  document.getElementById('progressBreakdown').innerHTML = breakdownHtml;
+
+  renderPayouts();
+}
+
+// ============ PAYOUTS ============
+function calcPayoutSchedule() {
+  const [y, m] = currentMonth.split('-').map(Number);
+  const md = getMonthData();
+  const days = getDaysInMonth(currentMonth);
+  const dayAmt = (d, id) => ((md.daily || {})[String(d).padStart(2, '0')] || {})[id] || 0;
+  const results = [];
+
+  for (const co of COMPANIES) {
+    const id = co.id;
+    const base = { companyId: id, companyName: co.name, color: co.color };
+    const cfg = resolvePayoutConfig(co);
+    const patternLabel = getPayoutConfigLabel(cfg);
+
+    if (cfg.type === 'instant') {
+      let total = 0;
+      for (let d = 1; d <= days; d++) total += dayAmt(d, id);
+      results.push({ ...base, patternLabel, periodLabel: '今月累計', payDate: null, payDateStr: '依頼時', amount: total });
+
+    } else if (cfg.type === 'weekly') {
+      const cutDow = cfg.cutoffDow ?? 0;
+      const payDow = cfg.payDow ?? cutDow;
+      let diff = payDow - cutDow; if (diff <= 0) diff += 7;
+
+      // 前月末の未締め分を計算（前月の最終締め曜日の翌日〜前月末）
+      const prevM = m === 1 ? 12 : m - 1;
+      const prevY = m === 1 ? y - 1 : y;
+      const prevKey = `${prevY}-${String(prevM).padStart(2, '0')}`;
+      const prevDays = new Date(prevY, prevM, 0).getDate();
+      const prevData = data[prevKey];
+      const prevDayAmt = (d) => ((prevData && prevData.daily || {})[String(d).padStart(2, '0')] || {})[id] || 0;
+
+      // 前月末日の曜日から、最後の締め曜日を逆算
+      const lastDayDow = new Date(prevY, prevM - 1, prevDays).getDay();
+      let daysBack = lastDayDow - cutDow;
+      if (daysBack < 0) daysBack += 7;
+      const lastCutDay = prevDays - daysBack; // 前月の最後の締め曜日
+      const carryStart = lastCutDay + 1; // 繰り越し開始日
+
+      let wt = 0;
+      let wsLabel = '';
+      // 前月繰り越し分の金額を加算
+      if (carryStart <= prevDays) {
+        for (let pd = carryStart; pd <= prevDays; pd++) {
+          wt += prevDayAmt(pd);
+        }
+        wsLabel = `${prevM}/${carryStart}`;
+      }
+
+      let ws = wsLabel || null;
+      for (let d = 1; d <= days; d++) {
+        const dow = getDow(currentMonth, d);
+        if (ws === null) ws = `${m}/${d}`;
+        wt += dayAmt(d, id);
+        if (dow === cutDow) {
+          const cd = new Date(y, m - 1, d);
+          const pd = new Date(cd); pd.setDate(pd.getDate() + diff);
+          results.push({ ...base, patternLabel, periodLabel: `${ws}〜${m}/${d}`, payDate: pd, payDateStr: formatDate(pd), amount: wt });
+          ws = null; wt = 0;
+        }
+      }
+      if (ws !== null && wt > 0) {
+        results.push({ ...base, patternLabel, periodLabel: `${ws}〜${m}/${days}`, payDate: null, payDateStr: `翌${DOW_JP[payDow]}曜`, amount: wt });
+      }
+
+    } else if (cfg.type === 'monthly') {
+      const cutDay = cfg.cutoffDay ?? 31;
+      const effectiveCut = Math.min(cutDay, days);
+
+      if (cutDay < 28) {
+        // 2分割（前半: 1〜cutDay、後半: cutDay+1〜月末）
+        let amt1 = 0, amt2 = 0;
+        for (let d = 1; d <= days; d++) {
+          if (d <= effectiveCut) amt1 += dayAmt(d, id); else amt2 += dayAmt(d, id);
+        }
+        const cutDate1 = new Date(y, m - 1, effectiveCut);
+        const cutDate2 = new Date(y, m - 1, days);
+        let pd1, pd1Str, pd2, pd2Str;
+        if (cfg.payDay) {
+          pd1 = new Date(y, m - 1 + 1, cfg.payDay); pd1Str = formatDate(pd1);
+          pd2 = new Date(y, m - 1 + 2, cfg.payDay); pd2Str = formatDate(pd2);
+        } else if (cfg.payBusinessDays) {
+          pd1 = addBusinessDays(cutDate1, cfg.payBusinessDays); pd1Str = formatDate(pd1);
+          pd2 = addBusinessDays(cutDate2, cfg.payBusinessDays); pd2Str = formatDate(pd2);
+        } else {
+          const ne1 = new Date(y, m, 0); pd1 = ne1; pd1Str = formatDate(ne1);
+          const ne2 = new Date(y, m + 1, 0); pd2 = ne2; pd2Str = formatDate(ne2);
+        }
+        results.push({ ...base, patternLabel, periodLabel: `${m}/1〜${m}/${effectiveCut}`, payDate: pd1, payDateStr: pd1Str, amount: amt1 });
+        results.push({ ...base, patternLabel, periodLabel: `${m}/${effectiveCut + 1}〜${m}/${days}`, payDate: pd2, payDateStr: pd2Str, amount: amt2 });
+      } else {
+        // 月末締め → 1エントリ
+        let total = 0;
+        for (let d = 1; d <= days; d++) total += dayAmt(d, id);
+        let pd, pdStr;
+        if (cfg.payDay) {
+          pd = new Date(y, m, cfg.payDay); pdStr = formatDate(pd);
+        } else if (cfg.payBusinessDays) {
+          pd = addBusinessDays(new Date(y, m - 1, days), cfg.payBusinessDays); pdStr = formatDate(pd);
+        } else {
+          pd = new Date(y, m + 1, 0); pdStr = formatDate(pd);
+        }
+        results.push({ ...base, patternLabel, periodLabel: `${m}/1〜${m}/${days}`, payDate: pd, payDateStr: pdStr, amount: total });
+      }
+
+    } else {
+      // unknown → 随時振込扱い
+      let total = 0;
+      for (let d = 1; d <= days; d++) total += dayAmt(d, id);
+      results.push({ ...base, patternLabel: patternLabel || '随時振込', periodLabel: '今月累計', payDate: null, payDateStr: '依頼時', amount: total });
+    }
+  }
+
+  return results;
+}
+
+function renderPayouts() {
+  const schedule = calcPayoutSchedule();
+  const grid = document.getElementById('payoutGrid');
+  const groups = []; const groupMap = {};
+  for (const entry of schedule) {
+    if (!groupMap[entry.companyId]) {
+      groupMap[entry.companyId] = { companyName: entry.companyName, color: entry.color, patternLabel: entry.patternLabel, entries: [] };
+      groups.push(groupMap[entry.companyId]);
+    }
+    groupMap[entry.companyId].entries.push(entry);
+  }
+  const cards = groups.map(g => `<div class="payout-card">
+        <h3><span class="payout-dot" style="background:${g.color}"></span>${g.companyName}<span style="font-size:10px;color:var(--text-dim);margin-left:auto;">${g.patternLabel}</span></h3>
+        ${g.entries.map(e => `<div class="payout-row"><span>${e.periodLabel}</span><span>${e.payDateStr}</span><span class="payout-amount" style="color:${g.color}">¥${e.amount.toLocaleString()}</span></div>`).join('')}
+      </div>`);
+  grid.innerHTML = cards.join('');
+}
+
+function onGoalDayChange(value) {
+  const md = getMonthData();
+  let v = parseInt(value) || 0;
+  if (v < 1) v = 0;
+  if (v > 31) v = 31;
+  md.payoutGoalDay = v;
+  renderHolidayCalendar();
+  recalcAll();
+  saveData();
+}
+
+// ============ SOURCE MANAGER ============
+function getSourceConfig(type) {
+  if (type === 'company') return { arr: COMPANIES, save: saveCompanies, load: loadCompanies, containerId: 'companyList', label: '業者' };
+  if (type === 'extra')   return { arr: EXTRA_FIXED, save: saveExtraFixed, load: loadExtraFixed, containerId: 'extraFixedList', label: 'その他' };
+}
+
+function renderSourceManager() {
+  renderSourceList('company', COMPANIES, 'companyList');
+  renderSourceList('extra', EXTRA_FIXED, 'extraFixedList');
+}
+
+const KNOWN_COMPANY_IDS = ['uber', 'demae', 'rocket', 'menu'];
+const DEFAULT_PAYOUT_CONFIGS = {
+  uber:   { type: 'weekly',  cutoffDow: 0, payDow: 2 },
+  demae:  { type: 'monthly', cutoffDay: 15, payDay: null, payBusinessDays: 5 },
+  rocket: { type: 'weekly',  cutoffDow: 2, payDow: 5 },
+  menu:   { type: 'instant' }
+};
+
+function resolvePayoutConfig(co) {
+  if (co.payoutConfig) return co.payoutConfig;
+  const pt = co.payoutType;
+  if (pt) {
+    if (pt === 'instant') return { type: 'instant' };
+    if (pt === 'weekly_sun') return { type: 'weekly', cutoffDow: 0, payDow: 2 };
+    if (pt === 'weekly_tue') return { type: 'weekly', cutoffDow: 2, payDow: 5 };
+    if (pt === 'bimonthly') return { type: 'monthly', cutoffDay: 15, payDay: null, payBusinessDays: 5 };
+    if (pt === 'monthly') return { type: 'monthly', cutoffDay: 31, payDay: null, payBusinessDays: 0 };
+    return { type: 'monthly', cutoffDay: 31, payDay: null, payBusinessDays: 0 };
+  }
+  const id = co.id;
+  if (DEFAULT_PAYOUT_CONFIGS[id]) return { ...DEFAULT_PAYOUT_CONFIGS[id] };
+  return { type: 'monthly', cutoffDay: 31, payDay: null, payBusinessDays: 0 };
+}
+
+function getPayoutConfigLabel(cfg) {
+  if (!cfg) return '未設定';
+  if (cfg.type === 'instant') return '随時振込';
+  if (cfg.type === 'weekly') {
+    return `毎週${DOW_JP[cfg.cutoffDow]}曜締→${DOW_JP[cfg.payDow]}曜払`;
+  }
+  if (cfg.type === 'monthly') {
+    const cutLabel = cfg.cutoffDay >= 28 ? '月末' : `${cfg.cutoffDay}日`;
+    let payLabel;
+    if (cfg.payDay) {
+      payLabel = `翌月${cfg.payDay}日払`;
+    } else if (cfg.payBusinessDays) {
+      payLabel = `${cfg.payBusinessDays}営業日後`;
+    } else {
+      payLabel = '翌月末払';
+    }
+    return `${cutLabel}締→${payLabel}`;
+  }
+  return '未設定';
+}
+
+function renderSourceList(type, arr, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = arr.map((item, i) => {
+    let payoutHtml = '';
+    if (type === 'company') {
+      const cfg = resolvePayoutConfig(item);
+      const t = cfg.type || 'monthly';
+      const dowOpts = DOW_JP.map((d, di) => `<option value="${di}" ${di === (cfg.cutoffDow ?? 0) ? 'selected' : ''}>${d}曜</option>`).join('');
+      const dowOpts2 = DOW_JP.map((d, di) => `<option value="${di}" ${di === (cfg.payDow ?? 0) ? 'selected' : ''}>${d}曜</option>`).join('');
+      const usePayDay = cfg.payDay ? true : false;
+      payoutHtml = `
+      <div class="payout-config">
+        <div class="payout-type-radios">
+          <label><input type="radio" name="pt_${i}" value="instant" ${t === 'instant' ? 'checked' : ''}
+            onchange="setPayoutType(${i}, 'instant')">随時振込</label>
+          <label><input type="radio" name="pt_${i}" value="monthly" ${t === 'monthly' ? 'checked' : ''}
+            onchange="setPayoutType(${i}, 'monthly')">月次</label>
+          <label><input type="radio" name="pt_${i}" value="weekly" ${t === 'weekly' ? 'checked' : ''}
+            onchange="setPayoutType(${i}, 'weekly')">週次</label>
+        </div>
+        ${t === 'monthly' ? `
+        <div class="payout-detail">
+          <div class="payout-detail-row">
+            <span class="payout-note">締め日</span>
+            <input type="number" class="payout-num-input" min="1" max="31" value="${cfg.cutoffDay ?? 31}"
+              onchange="setPayoutField(${i}, 'cutoffDay', parseInt(this.value)||31)">
+            <span class="payout-note">日 (31=月末)</span>
+          </div>
+          <div class="payout-detail-row">
+            <label><input type="radio" name="ptm_${i}" value="payDay" ${usePayDay ? 'checked' : ''}
+              onchange="setPayoutMonthlyMethod(${i}, 'payDay')">毎月</label>
+            <input type="number" class="payout-num-input" min="1" max="31" value="${cfg.payDay || 25}"
+              ${!usePayDay ? 'disabled' : ''}
+              onchange="setPayoutField(${i}, 'payDay', parseInt(this.value)||25)">
+            <span class="payout-note">日払い</span>
+          </div>
+          <div class="payout-detail-row">
+            <label><input type="radio" name="ptm_${i}" value="payBD" ${!usePayDay ? 'checked' : ''}
+              onchange="setPayoutMonthlyMethod(${i}, 'payBD')">締め後</label>
+            <input type="number" class="payout-num-input" min="0" max="30" value="${cfg.payBusinessDays ?? 5}"
+              ${usePayDay ? 'disabled' : ''}
+              onchange="setPayoutField(${i}, 'payBusinessDays', parseInt(this.value)||0)">
+            <span class="payout-note">営業日後</span>
+          </div>
+        </div>
+        ` : ''}
+        ${t === 'weekly' ? `
+        <div class="payout-detail">
+          <div class="payout-detail-row">
+            <span class="payout-note">締め曜日</span>
+            <select class="payout-dow-select" onchange="setPayoutField(${i}, 'cutoffDow', parseInt(this.value))">
+              ${dowOpts}
+            </select>
+          </div>
+          <div class="payout-detail-row">
+            <span class="payout-note">振込曜日</span>
+            <select class="payout-dow-select" onchange="setPayoutField(${i}, 'payDow', parseInt(this.value))">
+              ${dowOpts2}
+            </select>
+          </div>
+        </div>
+        ` : ''}
+      </div>`;
+    }
+    return `
+    <div class="source-item" draggable="true" data-type="${type}" data-index="${i}">
+      <span class="drag-handle" title="ドラッグで並び替え">⠿</span>
+      <input type="color" value="${item.color}" onchange="updateSource('${type}', ${i}, 'color', this.value)" title="テーマカラー">
+      <input type="text" value="${item.name}" placeholder="${getSourceConfig(type).label}名"
+        onchange="updateSource('${type}', ${i}, 'name', this.value)">
+      <button class="delete-btn" onclick="deleteSource('${type}', ${i})" title="削除">✕</button>
+      ${payoutHtml}
+    </div>
+  `;
+  }).join('');
+  setupDragAndDrop(containerId, type);
+}
+
+function setPayoutType(index, type) {
+  const co = COMPANIES[index];
+  if (!co) return;
+  delete co.payoutType;
+  if (type === 'instant') {
+    co.payoutConfig = { type: 'instant' };
+  } else if (type === 'weekly') {
+    co.payoutConfig = { type: 'weekly', cutoffDow: 0, payDow: 2 };
+  } else {
+    co.payoutConfig = { type: 'monthly', cutoffDay: 31, payDay: null, payBusinessDays: 5 };
+  }
+  saveCompanies(COMPANIES);
+  renderSourceManager();
+  refreshAllViews();
+}
+
+function setPayoutField(index, field, value) {
+  const co = COMPANIES[index];
+  if (!co) return;
+  if (!co.payoutConfig) co.payoutConfig = resolvePayoutConfig(co);
+  delete co.payoutType;
+  co.payoutConfig[field] = value;
+  saveCompanies(COMPANIES);
+  recalcAll();
+}
+
+function setPayoutMonthlyMethod(index, method) {
+  const co = COMPANIES[index];
+  if (!co) return;
+  if (!co.payoutConfig) co.payoutConfig = resolvePayoutConfig(co);
+  delete co.payoutType;
+  if (method === 'payDay') {
+    co.payoutConfig.payDay = co.payoutConfig.payDay || 25;
+    co.payoutConfig.payBusinessDays = null;
+  } else {
+    co.payoutConfig.payDay = null;
+    co.payoutConfig.payBusinessDays = co.payoutConfig.payBusinessDays || 5;
+  }
+  saveCompanies(COMPANIES);
+  renderSourceManager();
+  refreshAllViews();
+}
+
+function addSource(type) {
+  const cfg = getSourceConfig(type);
+  const newItem = { id: 'custom_' + Date.now(), name: '新しい項目', color: '#888888' };
+  if (type === 'company') newItem.payoutConfig = { type: 'monthly', cutoffDay: 31, payDay: null, payBusinessDays: 1 };
+  cfg.arr.push(newItem);
+  cfg.save(cfg.arr);
+  renderSourceManager();
+  refreshAllViews();
+}
+
+function updateSource(type, index, field, value) {
+  const cfg = getSourceConfig(type);
+  cfg.arr[index][field] = value;
+  cfg.save(cfg.arr);
+  renderSourceManager();
+  refreshAllViews();
+}
+
+function deleteSource(type, index) {
+  const cfg = getSourceConfig(type);
+  const name = cfg.arr[index].name || '(名称未設定)';
+  if (!confirm(`「${name}」を削除しますか？\n\n※この${cfg.label}に入力済みのデータは内部に保持されますが、画面には表示されなくなります。`)) return;
+  cfg.arr.splice(index, 1);
+  cfg.save(cfg.arr);
+  renderSourceManager();
+  refreshAllViews();
+}
+
+function setupDragAndDrop(containerId, type) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const items = container.querySelectorAll('.source-item');
+  let dragIdx = null;
+
+  items.forEach((item, i) => {
+    item.addEventListener('dragstart', (e) => {
+      dragIdx = i;
+      item.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      item.style.opacity = '1';
+      dragIdx = null;
+      items.forEach(el => el.style.borderTop = '');
+    });
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      item.style.borderTop = '2px solid var(--accent)';
+    });
+    item.addEventListener('dragleave', () => {
+      item.style.borderTop = '';
+    });
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      item.style.borderTop = '';
+      if (dragIdx === null || dragIdx === i) return;
+      const cfg = getSourceConfig(type);
+      const [moved] = cfg.arr.splice(dragIdx, 1);
+      cfg.arr.splice(i, 0, moved);
+      cfg.save(cfg.arr);
+      renderSourceManager();
+      refreshAllViews();
+    });
+  });
+}
+
+function refreshAllViews() {
+  renderDeliveryRows();
+  renderMainJobIncome();
+  renderExtraIncome();
+  renderHolidayCalendar();
+  renderExpenseItems();
+  recalcAll();
+}
+
+// ============ DAILY RESULT MODAL ============
+function openDailyResult(dd) {
+  const md = getMonthData();
+  const dayData = (md.daily || {})[dd] || {};
+  const d = parseInt(dd);
+  const [y, m] = currentMonth.split('-').map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  const dateStr = `${m}月${d}日（${DOW_JP[dow]}）`;
+
+  // 業者別売上（0以外のみ）
+  let total = 0;
+  const items = [];
+  COMPANIES.forEach(co => {
+    const amt = dayData[co.id] || 0;
+    if (amt > 0) {
+      items.push({ name: co.name, color: co.color, amount: amt });
+      total += amt;
+    }
+  });
+
+  // 全業者0なら開かない
+  if (total === 0) return;
+
+  // 前回の時給表示を削除
+  const prevHourly = document.getElementById('drHourly');
+  if (prevHourly) prevHourly.remove();
+
+  document.getElementById('drDate').textContent = dateStr;
+  document.getElementById('drItems').innerHTML = items.map(it => `
+    <div class="dr-item">
+      <div class="dr-item-name">
+        <div class="dr-item-dot" style="background:${it.color}"></div>
+        ${it.name}
+      </div>
+      <div class="dr-item-amount" style="color:${it.color}">¥${it.amount.toLocaleString()}</div>
+    </div>
+  `).join('');
+  document.getElementById('drTotal').textContent = `¥${total.toLocaleString()}`;
+
+  // 稼働時間・時給換算
+  const hours = md.hours[dd] || 0;
+  let hoursHtml = '';
+  if (hours > 0) {
+    const hourlyRate = Math.round(total / hours);
+    hoursHtml = `
+      <div id="drHourly" style="display:flex;justify-content:space-between;margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:13px;">
+        <span style="color:var(--text-dim);">⏱ ${hours}h 稼働</span>
+        <span style="color:var(--warning);font-weight:700;">時給 ¥${hourlyRate.toLocaleString()}</span>
+      </div>`;
+  }
+  document.querySelector('.dr-total').insertAdjacentHTML('afterend', hoursHtml);
+
+  document.getElementById('drOverlay').classList.add('open');
+}
+
+function closeDailyResult() {
+  document.getElementById('drOverlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeDailyResult();
+    closePeriodSummary();
+    const helpO = document.getElementById('helpOverlay');
+    if (helpO && helpO.classList.contains('open')) helpO.classList.remove('open');
+  }
+});
+
+// ============ HOURS INPUT ============
+function onHoursInput(el) {
+  const md = getMonthData();
+  const day = el.dataset.day;
+  const val = parseFloat(el.value);
+  if (isNaN(val) || val <= 0) {
+    delete md.hours[day];
+  } else {
+    md.hours[day] = Math.round(val * 10) / 10;
+  }
+  recalcAll();
+  saveData();
+}
+
+// ============ GAS INPUT (per-day) ============
+function onGasInput(el) {
+  const md = getMonthData();
+  const day = el.dataset.day;
+  const val = parseExtraValue(el.value);
+  if (!val || val <= 0) {
+    delete md.gas[day];
+  } else {
+    md.gas[day] = val;
+  }
+  recalcAll();
+  saveData();
+}
+
+// ============ PERIOD SUMMARY ============
+function openPeriodSummary() {
+  const [y, m] = currentMonth.split('-').map(Number);
+  const days = getDaysInMonth(currentMonth);
+  document.getElementById('periodStart').value = `${y}-${String(m).padStart(2,'0')}-01`;
+  document.getElementById('periodEnd').value = `${y}-${String(m).padStart(2,'0')}-${String(days).padStart(2,'0')}`;
+  calcPeriodSummary();
+  document.getElementById('periodOverlay').classList.add('open');
+}
+
+function closePeriodSummary() {
+  document.getElementById('periodOverlay').classList.remove('open');
+}
+
+function calcPeriodSummary() {
+  const startStr = document.getElementById('periodStart').value;
+  const endStr = document.getElementById('periodEnd').value;
+  const result = document.getElementById('periodResult');
+  if (!startStr || !endStr) { result.innerHTML = '<p style="text-align:center;color:var(--text-dim);">期間を選択してください</p>'; return; }
+
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  if (start > end) { result.innerHTML = '<p style="text-align:center;color:var(--danger);">開始日が終了日より後です</p>'; return; }
+
+  // 全月のデータを横断して集計
+  const companyTotals = {};
+  COMPANIES.forEach(co => companyTotals[co.id] = { name: co.name, color: co.color, amount: 0 });
+  let deliveryTotal = 0, daysWorked = 0, totalHours = 0, gasTotal = 0;
+
+  const cur = new Date(start);
+  while (cur <= end) {
+    const ym = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
+    const dd = String(cur.getDate()).padStart(2,'0');
+    const monthData = data[ym];
+    if (monthData) {
+      const dayData = (monthData.daily || {})[dd] || {};
+      let dayTotal = 0;
+      COMPANIES.forEach(co => {
+        const amt = dayData[co.id] || 0;
+        if (companyTotals[co.id]) companyTotals[co.id].amount += amt;
+        dayTotal += amt;
+      });
+      deliveryTotal += dayTotal;
+      if (dayTotal > 0) daysWorked++;
+      if (monthData.hours && monthData.hours[dd]) totalHours += monthData.hours[dd];
+      if (monthData.gas && monthData.gas[dd]) gasTotal += monthData.gas[dd];
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  const diffDays = Math.ceil((end - start) / (1000*60*60*24)) + 1;
+  const avgPerDay = daysWorked > 0 ? Math.round(deliveryTotal / daysWorked) : 0;
+  const hourlyRate = totalHours > 0 ? Math.round(deliveryTotal / totalHours) : 0;
+  const net = deliveryTotal - gasTotal;
+
+  let html = '<div class="period-result">';
+  html += `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${diffDays}日間（稼働${daysWorked}日）</div>`;
+
+  COMPANIES.forEach(co => {
+    const t = companyTotals[co.id];
+    if (t && t.amount > 0) {
+      html += `<div class="period-result-row">
+        <div class="label"><span class="payout-dot" style="background:${t.color}"></span>${t.name}</div>
+        <div class="value" style="color:${t.color}">¥${t.amount.toLocaleString()}</div>
+      </div>`;
+    }
+  });
+
+  html += `</div>`;
+  html += `<div class="period-result-total">
+    <div class="label">配達収入合計</div>
+    <div class="value">¥${deliveryTotal.toLocaleString()}</div>
+  </div>`;
+
+  if (gasTotal > 0) {
+    html += `<div class="period-result-row" style="margin-top:8px;">
+      <div class="label">⛽ ガソリン代</div>
+      <div class="value" style="color:var(--danger);font-size:16px;">−¥${gasTotal.toLocaleString()}</div>
+    </div>`;
+    html += `<div class="period-result-row">
+      <div class="label" style="font-weight:700;">実質収入</div>
+      <div class="value" style="color:var(--accent);font-size:20px;">¥${net.toLocaleString()}</div>
+    </div>`;
+  }
+
+  html += `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--text-dim);">`;
+  html += `<div>日平均: <span style="color:var(--text);font-weight:700;">¥${avgPerDay.toLocaleString()}</span></div>`;
+  if (totalHours > 0) {
+    html += `<div>合計: <span style="color:var(--text);font-weight:700;">${totalHours}h</span></div>`;
+    html += `<div>時給換算: <span style="color:var(--warning);font-weight:700;">¥${hourlyRate.toLocaleString()}/h</span></div>`;
+  }
+  html += `</div>`;
+
+  result.innerHTML = html;
+}
+
+// ============ FLOATING BUTTON ============
+function scrollToToday() {
+  // 1. 今月に切り替え
+  const today = new Date();
+  const todayMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  if (currentMonth !== todayMonth) {
+    currentMonth = todayMonth;
+    document.getElementById('monthSelector').value = currentMonth;
+    render();
+  }
+
+  // 2. 配達売上タブに切り替え
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  const tabs = document.querySelectorAll('.tab');
+  if (tabs[0]) tabs[0].classList.add('active');
+  document.getElementById('tab-delivery').classList.add('active');
+
+  // 3. 今日の日付を2桁文字列で取得
+  const dd = String(today.getDate()).padStart(2, '0');
+
+  // 4. 当日のday-card内の入力欄を検索してスクロール
+  setTimeout(() => {
+    const todayInput = document.querySelector(`#tab-delivery .day-card input[data-day="${dd}"]`);
+    if (todayInput) {
+      const card = todayInput.closest('.day-card');
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => todayInput.focus(), 400);
+      }
+    }
+  }, 50);
+}
+
+// Scroll-to-top button visibility
+window.addEventListener('scroll', function() {
+  const btn = document.getElementById('scrollTopBtn');
+  if (btn) {
+    if (window.scrollY >= 300) {
+      btn.classList.add('visible');
+    } else {
+      btn.classList.remove('visible');
+    }
+  }
+}, { passive: true });
+
+init();
+</script>
+
+<!-- PWA: Inline Manifest & Service Worker Registration -->
+<script>
+(function() {
+  // --- Service Worker (inline via Blob URL) ---
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      const CACHE_NAME = 'delivery-dashboard-personal-v3';
+      const OFFLINE_URL = './';
+
+      self.addEventListener('install', function(event) {
+        event.waitUntil(
+          caches.open(CACHE_NAME).then(function(cache) {
+            return cache.addAll([OFFLINE_URL]);
+          })
+        );
+        self.skipWaiting();
+      });
+
+      self.addEventListener('activate', function(event) {
+        event.waitUntil(
+          caches.keys().then(function(names) {
+            return Promise.all(
+              names.filter(function(n) { return n !== CACHE_NAME; })
+                   .map(function(n) { return caches.delete(n); })
+            );
+          })
+        );
+        self.clients.claim();
+      });
+
+      self.addEventListener('fetch', function(event) {
+        if (event.request.mode === 'navigate') {
+          event.respondWith(
+            fetch(event.request).then(function(response) {
+              var clone = response.clone();
+              caches.open(CACHE_NAME).then(function(cache) {
+                cache.put(event.request, clone);
+              });
+              return response;
+            }).catch(function() {
+              return caches.match(event.request).then(function(cached) {
+                return cached || caches.match(OFFLINE_URL);
+              });
+            })
+          );
+        } else {
+          event.respondWith(
+            caches.match(event.request).then(function(cached) {
+              return cached || fetch(event.request).then(function(response) {
+                var clone = response.clone();
+                caches.open(CACHE_NAME).then(function(cache) {
+                  cache.put(event.request, clone);
+                });
+                return response;
+              });
+            })
+          );
+        }
+      });
+    `;
+    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+    const swURL = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swURL, { scope: './' }).catch(function() {
+      // BlobURL SW registration may be limited in scope on some browsers - silent fallback
+    });
+  }
+})();
+</script>
+</body>
+</html>
