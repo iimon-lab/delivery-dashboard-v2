@@ -496,14 +496,67 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 .scroll-top-btn.visible { display: flex; }
 .scroll-top-btn:hover { background: var(--surface2); transform: scale(1.1); }
 
-/* Hours Input */
+/* Hours Input - Drum Roll Picker */
 .hours-field { display: flex; align-items: center; gap: 4px; }
-.hours-field input {
-  width: 60px; text-align: right; font-family: 'JetBrains Mono', monospace;
-  font-size: 13px; padding: 8px 6px;
+.hours-tap {
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 8px 6px;
+  min-width: 55px; text-align: center; cursor: pointer; user-select: none;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); transition: border-color 0.2s;
 }
+.hours-tap:hover, .hours-tap:active { border-color: var(--accent); }
+.hours-tap.empty { color: var(--text-dim); }
 .hours-field .unit { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
-.day-card-field .hours-field input { font-size: 17px; padding: 10px 8px; width: 80px; }
+.day-card-field .hours-tap { font-size: 17px; padding: 10px 8px; min-width: 80px; }
+
+/* Drum Roll Picker Modal */
+.drum-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999;
+  display: none; align-items: flex-end; justify-content: center;
+}
+.drum-overlay.open { display: flex; }
+.drum-sheet {
+  background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-width: 400px;
+  padding: 0 0 env(safe-area-inset-bottom, 16px) 0; animation: drumSlideUp 0.25s ease-out;
+}
+@keyframes drumSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.drum-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+}
+.drum-header .drum-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.drum-header button {
+  background: none; border: none; font-size: 15px; font-weight: 600; cursor: pointer; padding: 4px 8px;
+}
+.drum-header .drum-cancel { color: var(--text-dim); }
+.drum-header .drum-done { color: var(--accent); }
+.drum-header .drum-clear { color: var(--danger); font-size: 13px; }
+.drum-body {
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  padding: 8px 20px; position: relative; height: 200px;
+}
+.drum-col {
+  flex: 0 0 72px; height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch; position: relative;
+  scrollbar-width: none;
+}
+.drum-col::-webkit-scrollbar { display: none; }
+.drum-item {
+  height: 40px; display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 500;
+  color: var(--text-dim); scroll-snap-align: center; transition: color 0.15s, transform 0.15s;
+  user-select: none;
+}
+.drum-item.selected { color: var(--text); font-weight: 700; transform: scale(1.1); }
+.drum-separator {
+  font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700;
+  color: var(--text); user-select: none; padding-bottom: 2px;
+}
+.drum-highlight {
+  position: absolute; left: 20px; right: 20px; top: 50%; transform: translateY(-50%);
+  height: 42px; border-top: 2px solid var(--accent-dim); border-bottom: 2px solid var(--accent-dim);
+  pointer-events: none; border-radius: 4px;
+}
 
 /* Period Summary Modal */
 .period-controls {
@@ -923,7 +976,7 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
       </div>
       <div style="margin-bottom:16px;">
         <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">⏱ 稼働時間</div>
-        <div>各日の入力欄に稼働時間を入力すると<b>時給換算</b>が表示されます</div>
+        <div>各日の時計マークをタップしてドラムロールで稼働時間を入力すると<b>時給換算</b>が表示されます</div>
       </div>
       <div style="margin-bottom:16px;">
         <div style="font-weight:700;color:var(--accent);margin-bottom:6px;">📊 期間集計</div>
@@ -1057,6 +1110,8 @@ function init() {
     render();
   });
   loadData();
+  migrateHoursToMinutes();
+  initDrumPicker();
   loadVisibility();
   renderSourceManager();
   renderExpenseItems();
@@ -1079,6 +1134,29 @@ function loadData() {
     if (saved) data = JSON.parse(saved);
   } catch(e) { data = {}; }
   // 目標金額は月別データから読み込み（render時に設定）
+}
+
+// 旧形式（小数時間）→新形式（分）への移行
+function migrateHoursToMinutes() {
+  if (localStorage.getItem('dd_hours_migrated') === 'v1') return;
+  let changed = false;
+  for (const ym of Object.keys(data)) {
+    const md = data[ym];
+    if (!md || !md.hours) continue;
+    for (const dd of Object.keys(md.hours)) {
+      const val = md.hours[dd];
+      if (typeof val === 'number' && val > 0 && val < 24.1) {
+        // 小数値（例：8.5）を分に変換
+        const h = Math.floor(val);
+        const fracMin = (val - h) * 60;
+        const m = Math.round(fracMin / 10) * 10; // 10分単位に丸め
+        md.hours[dd] = h * 60 + m;
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveData();
+  localStorage.setItem('dd_hours_migrated', 'v1');
 }
 
 function saveData() {
@@ -1494,11 +1572,7 @@ function renderDeliveryRows() {
           onkeydown="onDailyKeydown(event)">`;
       }).join('')}
       <div class="hours-field">
-        <input type="number" step="0.5" min="0" max="24" placeholder="-"
-          data-day="${dd}" value="${md.hours[dd] || ''}"
-          oninput="onHoursInput(this)" onfocus="this.select()"
-          style="width:55px;font-size:13px;padding:6px 4px;">
-        <span class="unit">h</span>
+        <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
       </div>
       <input type="text" inputmode="numeric" class="daily-input" placeholder="0"
         data-day="${dd}" data-type="gas"
@@ -1543,10 +1617,7 @@ function renderDeliveryRows() {
           <span class="field-dot" style="background:var(--text-dim)"></span>
           <span class="field-label">稼働時間</span>
           <div class="hours-field">
-            <input type="number" step="0.5" min="0" max="24" inputmode="decimal" placeholder="-"
-              data-day="${dd}" value="${md.hours[dd] || ''}"
-              oninput="onHoursInput(this)" onfocus="this.select()">
-            <span class="unit">h</span>
+            <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
           </div>
         </div>
         <div class="day-card-field">
@@ -1950,14 +2021,14 @@ function recalcAll() {
   let mainJobAmount = 0;
   (md.mainJobItems || []).forEach(item => mainJobAmount += (item.amount || 0));
 
-  // Hours total
-  let totalHours = 0;
+  // Hours total (stored in minutes)
+  let totalMinutes = 0;
   for (let d = 1; d <= days; d++) {
     const dd = String(d).padStart(2, '0');
-    if (md.hours[dd]) totalHours += md.hours[dd];
+    if (md.hours[dd]) totalMinutes += md.hours[dd];
   }
-  totalHours = Math.round(totalHours * 10) / 10;
-  const hourlyRate = totalHours > 0 ? Math.round(deliveryTotal / totalHours) : 0;
+  const totalHoursDecimal = minutesToDecimalHours(totalMinutes);
+  const hourlyRate = totalHoursDecimal > 0 ? Math.round(deliveryTotal / totalHoursDecimal) : 0;
 
   // Gas total
   let gasTotal = 0;
@@ -2029,7 +2100,7 @@ function recalcAll() {
     <div class="summary-card delivery">
       <div class="summary-label">配達収入</div>
       <div class="summary-value" style="color:var(--uber)">¥${deliveryTotal.toLocaleString()}</div>
-      <div class="summary-sub">${daysWorked}日稼働 / 日平均 ¥${avgPerDay.toLocaleString()}${totalHours > 0 ? ` / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>
+      <div class="summary-sub">${daysWorked}日稼働 / 日平均 ¥${avgPerDay.toLocaleString()}${totalMinutes > 0 ? ` / ${formatHoursMinutes(totalMinutes)} / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>
       ${gasTotal > 0 ? `<div class="summary-sub" style="color:var(--text-dim);">⛽ −¥${gasTotal.toLocaleString()} → 実質 ¥${netDelivery.toLocaleString()}</div>` : ''}
     </div>
     ${showMJ ? `<div class="summary-card" style="border-left:3px solid ${MAIN_JOB_COLOR};">
@@ -2548,14 +2619,15 @@ function openDailyResult(dd) {
   `).join('');
   document.getElementById('drTotal').textContent = `¥${total.toLocaleString()}`;
 
-  // 稼働時間・時給換算
-  const hours = md.hours[dd] || 0;
+  // 稼働時間・時給換算（minutes format）
+  const dayMinutes = md.hours[dd] || 0;
   let hoursHtml = '';
-  if (hours > 0) {
-    const hourlyRate = Math.round(total / hours);
+  if (dayMinutes > 0) {
+    const dayHoursDecimal = minutesToDecimalHours(dayMinutes);
+    const hourlyRate = Math.round(total / dayHoursDecimal);
     hoursHtml = `
       <div id="drHourly" style="display:flex;justify-content:space-between;margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:13px;">
-        <span style="color:var(--text-dim);">⏱ ${hours}h 稼働</span>
+        <span style="color:var(--text-dim);">⏱ ${formatHoursMinutes(dayMinutes)} 稼働</span>
         <span style="color:var(--warning);font-weight:700;">時給 ¥${hourlyRate.toLocaleString()}</span>
       </div>`;
   }
@@ -2572,23 +2644,171 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeDailyResult();
     closePeriodSummary();
+    drumCancel();
     const helpO = document.getElementById('helpOverlay');
     if (helpO && helpO.classList.contains('open')) helpO.classList.remove('open');
   }
 });
 
-// ============ HOURS INPUT ============
-function onHoursInput(el) {
+// ============ HOURS INPUT (Drum Roll Picker) ============
+let drumTargetDay = null;
+
+function initDrumPicker() {
+  const overlay = document.createElement('div');
+  overlay.className = 'drum-overlay';
+  overlay.id = 'drumOverlay';
+  overlay.innerHTML = `
+    <div class="drum-sheet">
+      <div class="drum-header">
+        <button class="drum-clear" onclick="drumClear()">クリア</button>
+        <span class="drum-title">稼働時間</span>
+        <button class="drum-done" onclick="drumDone()">完了</button>
+      </div>
+      <div class="drum-body">
+        <div class="drum-highlight"></div>
+        <div class="drum-col" id="drumHourCol"></div>
+        <div class="drum-separator">:</div>
+        <div class="drum-col" id="drumMinCol"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) drumCancel(); });
+
+  // Populate hour column (0-23)
+  const hCol = document.getElementById('drumHourCol');
+  // Add padding items for scroll centering (2 empty slots top and bottom)
+  hCol.innerHTML = '<div class="drum-item" style="visibility:hidden">&nbsp;</div><div class="drum-item" style="visibility:hidden">&nbsp;</div>';
+  for (let h = 0; h <= 23; h++) {
+    hCol.innerHTML += `<div class="drum-item" data-val="${h}">${String(h).padStart(2, '0')}</div>`;
+  }
+  hCol.innerHTML += '<div class="drum-item" style="visibility:hidden">&nbsp;</div><div class="drum-item" style="visibility:hidden">&nbsp;</div>';
+
+  // Populate minute column (00-50, step 10)
+  const mCol = document.getElementById('drumMinCol');
+  mCol.innerHTML = '<div class="drum-item" style="visibility:hidden">&nbsp;</div><div class="drum-item" style="visibility:hidden">&nbsp;</div>';
+  for (let m = 0; m <= 50; m += 10) {
+    mCol.innerHTML += `<div class="drum-item" data-val="${m}">${String(m).padStart(2, '0')}</div>`;
+  }
+  mCol.innerHTML += '<div class="drum-item" style="visibility:hidden">&nbsp;</div><div class="drum-item" style="visibility:hidden">&nbsp;</div>';
+
+  // Scroll listeners to highlight selected
+  hCol.addEventListener('scroll', () => drumUpdateSelection(hCol));
+  mCol.addEventListener('scroll', () => drumUpdateSelection(mCol));
+}
+
+function drumUpdateSelection(col) {
+  const items = col.querySelectorAll('.drum-item[data-val]');
+  const colRect = col.getBoundingClientRect();
+  const center = colRect.top + colRect.height / 2;
+  let closest = null, minDist = Infinity;
+  items.forEach(item => {
+    const r = item.getBoundingClientRect();
+    const dist = Math.abs((r.top + r.height / 2) - center);
+    if (dist < minDist) { minDist = dist; closest = item; }
+    item.classList.remove('selected');
+  });
+  if (closest) closest.classList.add('selected');
+}
+
+function drumGetSelected(colId) {
+  const col = document.getElementById(colId);
+  const sel = col.querySelector('.drum-item.selected');
+  return sel ? parseInt(sel.dataset.val) : 0;
+}
+
+function drumScrollTo(colId, val) {
+  const col = document.getElementById(colId);
+  const items = col.querySelectorAll('.drum-item[data-val]');
+  for (const item of items) {
+    if (parseInt(item.dataset.val) === val) {
+      // Scroll so item is centered: item offset - (col height / 2) + (item height / 2)
+      const targetTop = item.offsetTop - col.clientHeight / 2 + item.clientHeight / 2;
+      col.scrollTop = targetTop;
+      drumUpdateSelection(col);
+      break;
+    }
+  }
+}
+
+function openDrumPicker(day) {
+  drumTargetDay = day;
   const md = getMonthData();
-  const day = el.dataset.day;
-  const val = parseFloat(el.value);
-  if (isNaN(val) || val <= 0) {
-    delete md.hours[day];
+  const val = md.hours[day] || 0; // stored in minutes
+  const h = val > 0 ? Math.floor(val / 60) : 0;
+  const m = val > 0 ? val % 60 : 0;
+
+  document.getElementById('drumOverlay').classList.add('open');
+  // Scroll to current values after render
+  requestAnimationFrame(() => {
+    drumScrollTo('drumHourCol', h);
+    drumScrollTo('drumMinCol', m);
+  });
+}
+
+function drumDone() {
+  const h = drumGetSelected('drumHourCol');
+  const m = drumGetSelected('drumMinCol');
+  const totalMin = h * 60 + m;
+  const md = getMonthData();
+  if (totalMin <= 0) {
+    delete md.hours[drumTargetDay];
   } else {
-    md.hours[day] = Math.round(val * 10) / 10;
+    md.hours[drumTargetDay] = totalMin;
   }
   recalcAll();
   saveData();
+  drumClose();
+  // Update display
+  updateHoursTapDisplay(drumTargetDay);
+}
+
+function drumClear() {
+  const md = getMonthData();
+  delete md.hours[drumTargetDay];
+  recalcAll();
+  saveData();
+  drumClose();
+  updateHoursTapDisplay(drumTargetDay);
+}
+
+function drumCancel() {
+  drumClose();
+}
+
+function drumClose() {
+  const el = document.getElementById('drumOverlay');
+  if (el) el.classList.remove('open');
+  drumTargetDay = null;
+}
+
+function updateHoursTapDisplay(day) {
+  const md = getMonthData();
+  const val = md.hours[day] || 0;
+  // Update all tap elements for this day
+  document.querySelectorAll(`.hours-tap[data-day="${day}"]`).forEach(el => {
+    if (val > 0) {
+      const h = Math.floor(val / 60);
+      const m = val % 60;
+      el.textContent = `${h}:${String(m).padStart(2, '0')}`;
+      el.classList.remove('empty');
+    } else {
+      el.textContent = '-';
+      el.classList.add('empty');
+    }
+  });
+}
+
+function formatHoursMinutes(totalMinutes) {
+  if (!totalMinutes || totalMinutes <= 0) return '';
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (m === 0) return `${h}h`;
+  return `${h}h${String(m).padStart(2, '0')}m`;
+}
+
+function minutesToDecimalHours(totalMinutes) {
+  return totalMinutes / 60;
 }
 
 // ============ GAS INPUT (per-day) ============
@@ -2632,7 +2852,7 @@ function calcPeriodSummary() {
   // 全月のデータを横断して集計
   const companyTotals = {};
   COMPANIES.forEach(co => companyTotals[co.id] = { name: co.name, color: co.color, amount: 0 });
-  let deliveryTotal = 0, daysWorked = 0, totalHours = 0, gasTotal = 0;
+  let deliveryTotal = 0, daysWorked = 0, totalMinutesPeriod = 0, gasTotal = 0;
 
   const cur = new Date(start);
   while (cur <= end) {
@@ -2649,7 +2869,7 @@ function calcPeriodSummary() {
       });
       deliveryTotal += dayTotal;
       if (dayTotal > 0) daysWorked++;
-      if (monthData.hours && monthData.hours[dd]) totalHours += monthData.hours[dd];
+      if (monthData.hours && monthData.hours[dd]) totalMinutesPeriod += monthData.hours[dd];
       if (monthData.gas && monthData.gas[dd]) gasTotal += monthData.gas[dd];
     }
     cur.setDate(cur.getDate() + 1);
@@ -2657,7 +2877,8 @@ function calcPeriodSummary() {
 
   const diffDays = Math.ceil((end - start) / (1000*60*60*24)) + 1;
   const avgPerDay = daysWorked > 0 ? Math.round(deliveryTotal / daysWorked) : 0;
-  const hourlyRate = totalHours > 0 ? Math.round(deliveryTotal / totalHours) : 0;
+  const totalHoursDecPeriod = minutesToDecimalHours(totalMinutesPeriod);
+  const hourlyRate = totalHoursDecPeriod > 0 ? Math.round(deliveryTotal / totalHoursDecPeriod) : 0;
   const net = deliveryTotal - gasTotal;
 
   let html = '<div class="period-result">';
@@ -2692,8 +2913,8 @@ function calcPeriodSummary() {
 
   html += `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--text-dim);">`;
   html += `<div>日平均: <span style="color:var(--text);font-weight:700;">¥${avgPerDay.toLocaleString()}</span></div>`;
-  if (totalHours > 0) {
-    html += `<div>合計: <span style="color:var(--text);font-weight:700;">${totalHours}h</span></div>`;
+  if (totalMinutesPeriod > 0) {
+    html += `<div>合計: <span style="color:var(--text);font-weight:700;">${formatHoursMinutes(totalMinutesPeriod)}</span></div>`;
     html += `<div>時給換算: <span style="color:var(--warning);font-weight:700;">¥${hourlyRate.toLocaleString()}/h</span></div>`;
   }
   html += `</div>`;
