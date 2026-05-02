@@ -1971,6 +1971,8 @@ function recalcAll() {
   const goalDayCalc = md.payoutGoalDay || 0;
   const goalDateCalc = getGoalDateForMonth(curY, curM, goalDayCalc);
   let deliveryTotal = 0, deliveryTotalEffective = 0, daysWorked = 0;
+  // ペース判定用：休日に稼いだ日を分母から除外（休日売上はボーナス扱い）
+  let daysWorkedPlanned = 0, deliveryPlanned = 0;
   for (let d = 1; d <= days; d++) {
     const dd = String(d).padStart(2, '0');
     const dayData = (md.daily || {})[dd] || {};
@@ -1990,7 +1992,13 @@ function recalcAll() {
     });
     deliveryTotal += dayTotal;
     deliveryTotalEffective += dayEffective;
-    if (dayTotal > 0) daysWorked++;
+    if (dayTotal > 0) {
+      daysWorked++;
+      if (!(md.holidays || []).includes(d)) {
+        daysWorkedPlanned++;
+        deliveryPlanned += dayTotal;
+      }
+    }
 
     const totalText = dayTotal > 0 ? `¥${dayTotal.toLocaleString()}` : '¥0';
     const totalColor = dayTotal >= 12000 ? 'var(--success)' : dayTotal >= 10500 ? 'var(--text)' : dayTotal > 0 ? 'var(--warning)' : 'var(--text-dim)';
@@ -2059,7 +2067,8 @@ function recalcAll() {
   let remainingWorkDays = Math.max(0, remainingDaysRaw - futureHolidays);
 
   const dailyNeeded = remainingWorkDays > 0 ? Math.ceil(remaining / remainingWorkDays) : 0;
-  const avgPerDay = daysWorked > 0 ? Math.round(deliveryTotal / daysWorked) : 0;
+  // 日平均：休日売上はボーナス扱いで分母から除外（ペース判定の歪み防止）
+  const avgPerDay = daysWorkedPlanned > 0 ? Math.round(deliveryPlanned / daysWorkedPlanned) : 0;
   const pct = target > 0 ? Math.min(999, Math.round(grandTotalEffective / target * 100)) : 0;
 
   const payDate = getPaymentDate(currentMonth);
@@ -2854,11 +2863,14 @@ function calcPeriodSummary() {
   const companyTotals = {};
   COMPANIES.forEach(co => companyTotals[co.id] = { name: co.name, color: co.color, amount: 0 });
   let deliveryTotal = 0, daysWorked = 0, totalMinutesPeriod = 0, gasTotal = 0;
+  // 日平均：休日売上はボーナス扱いで分母から除外
+  let daysWorkedPlanned = 0, deliveryPlanned = 0;
 
   const cur = new Date(start);
   while (cur <= end) {
     const ym = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
     const dd = String(cur.getDate()).padStart(2,'0');
+    const dNum = cur.getDate();
     const monthData = data[ym];
     if (monthData) {
       const dayData = (monthData.daily || {})[dd] || {};
@@ -2869,7 +2881,13 @@ function calcPeriodSummary() {
         dayTotal += amt;
       });
       deliveryTotal += dayTotal;
-      if (dayTotal > 0) daysWorked++;
+      if (dayTotal > 0) {
+        daysWorked++;
+        if (!(monthData.holidays || []).includes(dNum)) {
+          daysWorkedPlanned++;
+          deliveryPlanned += dayTotal;
+        }
+      }
       if (monthData.hours && monthData.hours[dd]) totalMinutesPeriod += monthData.hours[dd];
       if (monthData.gas && monthData.gas[dd]) gasTotal += monthData.gas[dd];
     }
@@ -2877,7 +2895,7 @@ function calcPeriodSummary() {
   }
 
   const diffDays = Math.ceil((end - start) / (1000*60*60*24)) + 1;
-  const avgPerDay = daysWorked > 0 ? Math.round(deliveryTotal / daysWorked) : 0;
+  const avgPerDay = daysWorkedPlanned > 0 ? Math.round(deliveryPlanned / daysWorkedPlanned) : 0;
   const totalHoursDecPeriod = minutesToDecimalHours(totalMinutesPeriod);
   const hourlyRate = totalHoursDecPeriod > 0 ? Math.round(deliveryTotal / totalHoursDecPeriod) : 0;
   const net = deliveryTotal - gasTotal;
@@ -2978,7 +2996,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v5';
+      const CACHE_NAME = 'delivery-dashboard-personal-v6';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
