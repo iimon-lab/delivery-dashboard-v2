@@ -513,6 +513,7 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 .drum-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999;
   display: none; align-items: center; justify-content: center;
+  touch-action: none; overscroll-behavior: contain;
 }
 .drum-overlay.open { display: flex; }
 .drum-sheet {
@@ -536,7 +537,7 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
   padding: 8px 20px; position: relative; height: 200px;
 }
 .drum-col {
-  flex: 0 0 72px; height: 100%; overflow-y: scroll; overflow-x: hidden; scroll-snap-type: y mandatory;
+  flex: 0 0 110px; height: 100%; overflow-y: scroll; overflow-x: hidden; scroll-snap-type: y mandatory;
   -webkit-overflow-scrolling: touch; position: relative;
   scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain;
 }
@@ -1115,6 +1116,57 @@ function init() {
   loadVisibility();
   renderSourceManager();
   renderExpenseItems();
+  setupSwipeMonthNavigation();
+  render();
+}
+
+// ============ SWIPE MONTH NAVIGATION (#30) ============
+function setupSwipeMonthNavigation() {
+  let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+  const SWIPE_THRESHOLD = 80;       // 横スワイプ判定の最小距離(px)
+  const VERTICAL_TOLERANCE = 60;    // 縦移動の許容範囲(px)
+  const MAX_DURATION = 600;         // スワイプの最大所要時間(ms)
+
+  document.addEventListener('touchstart', (e) => {
+    if (!e.touches[0]) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    if (!e.changedTouches[0]) return;
+    if (Date.now() - touchStartTime > MAX_DURATION) return;
+
+    // モーダル類が開いている時は無効化
+    const drumO = document.getElementById('drumOverlay');
+    if (drumO && drumO.classList.contains('open')) return;
+    const periodO = document.getElementById('periodSummaryOverlay');
+    if (periodO && periodO.classList.contains('open')) return;
+    const helpO = document.getElementById('helpOverlay');
+    if (helpO && helpO.classList.contains('open')) return;
+
+    // 入力系/操作系へのスワイプは除外（誤反応防止）
+    const tgt = e.target;
+    if (tgt.closest && tgt.closest('input, select, textarea, button, .drum-overlay, .holiday-cell')) return;
+
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+    if (Math.abs(dy) > VERTICAL_TOLERANCE) return;
+    if (Math.abs(dx) <= Math.abs(dy)) return;
+
+    changeMonthBySwipe(dx < 0 ? 1 : -1);
+  }, { passive: true });
+}
+
+function changeMonthBySwipe(delta) {
+  const [y, m] = currentMonth.split('-').map(Number);
+  const newDate = new Date(y, m - 1 + delta, 1);
+  const newMonth = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`;
+  currentMonth = newMonth;
+  const sel = document.getElementById('monthSelector');
+  if (sel) sel.value = currentMonth;
   render();
 }
 
@@ -1378,7 +1430,16 @@ function toggleSettings() {
 function toggleHolidaySection() {
   const s = document.getElementById('holidaySection');
   s.style.display = s.style.display === 'none' ? 'block' : 'none';
-  if (s.style.display === 'block') renderHolidayCalendar();
+  if (s.style.display === 'block') {
+    const body = document.getElementById('holidayBody');
+    const arrow = document.getElementById('holidayArrow');
+    if (body) body.style.display = 'block';
+    if (arrow) arrow.classList.add('open');
+    renderHolidayCalendar();
+    requestAnimationFrame(() => {
+      s.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
 }
 
 function toggleHolidayBody() {
@@ -2377,7 +2438,7 @@ function getPayoutConfigLabel(cfg) {
     return `毎週${DOW_JP[cfg.cutoffDow]}曜締→${DOW_JP[cfg.payDow]}曜払`;
   }
   if (cfg.type === 'monthly') {
-    const cutLabel = cfg.cutoffDay >= 28 ? '月末' : `${cfg.cutoffDay}日`;
+    const cutLabel = cfg.cutoffDay >= 28 ? '月末' : `${cfg.cutoffDay}日／月末`;
     let payLabel;
     if (cfg.payDay) {
       payLabel = `翌月${cfg.payDay}日払`;
@@ -2747,6 +2808,7 @@ function openDrumPicker(day) {
   const h = val > 0 ? Math.floor(val / 60) : 0;
   const m = val > 0 ? val % 60 : 0;
 
+  document.body.style.overflow = 'hidden';
   document.getElementById('drumOverlay').classList.add('open');
   // Scroll to current values after render
   requestAnimationFrame(() => {
@@ -2789,6 +2851,7 @@ function drumCancel() {
 function drumClose() {
   const el = document.getElementById('drumOverlay');
   if (el) el.classList.remove('open');
+  document.body.style.overflow = '';
   drumTargetDay = null;
 }
 
@@ -2996,7 +3059,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v6';
+      const CACHE_NAME = 'delivery-dashboard-personal-v7';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
