@@ -765,6 +765,11 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 <div style="text-align:right; font-size:11px; color:var(--text-dim); margin-top:-18px; margin-bottom:16px; padding-right:4px;">※ 入力内容は自動保存されます</div>
 
 <div class="settings-section" id="settingsSection" style="display:none;">
+  <div class="settings-row" style="align-items:center;">
+    <label>アプリ更新</label>
+    <button class="btn" onclick="forceAppUpdate()" style="border-color:var(--accent);color:var(--accent);font-weight:700;">🔄 最新版に更新</button>
+    <span style="font-size:12px;color:var(--text-dim);">現在 <span id="appVersionLabel" class="mono">-</span> ／ 押しても入力した数字は消えません</span>
+  </div>
   <div class="settings-row">
     <label>目標金額（円）</label>
     <input type="text" inputmode="numeric" id="monthlyTarget" class="settings-amount" value="0"
@@ -1110,6 +1115,33 @@ function applyVisibility() {
 function isMainJobVisible() { return document.getElementById('showMainJob').checked; }
 function isExtraVisible() { return document.getElementById('showExtra').checked; }
 
+// ============ APP UPDATE (#31 アプリ内更新ボタン) ============
+// 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
+const APP_BUILD = '2026-06-01 v10';
+
+// 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
+async function forceAppUpdate() {
+  if (!confirm('最新版に更新します。\n入力した数字は消えません。よろしいですか？')) return;
+  try {
+    if (window.caches && caches.keys) {
+      const names = await caches.keys();
+      await Promise.all(names.map(function(n) { return caches.delete(n); }));
+    }
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(function(r) { return r.unregister(); }));
+    }
+  } catch (e) { /* キャッシュ破棄に失敗しても下のリロードで取り直す */ }
+  // キャッシュ回避クエリで最新HTMLを取得（origin不変＝数字は保持される）
+  const base = location.origin + location.pathname;
+  location.replace(base + '?u=' + Date.now());
+}
+
+function setAppVersionLabel() {
+  const vl = document.getElementById('appVersionLabel');
+  if (vl) vl.textContent = APP_BUILD;
+}
+
 // ============ INIT ============
 function init() {
   const now = new Date();
@@ -1126,6 +1158,7 @@ function init() {
   renderSourceManager();
   renderExpenseItems();
   setupSwipeMonthNavigation();
+  setAppVersionLabel();
   render();
 }
 
@@ -3092,7 +3125,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v9';
+      const CACHE_NAME = 'delivery-dashboard-personal-v10';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
