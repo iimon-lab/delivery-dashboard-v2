@@ -51,6 +51,10 @@ body {
 
 .mono { font-family: 'JetBrains Mono', monospace; }
 
+/* 月スワイプ スライド遷移（#30改良：カチッ→ヌルっと） */
+body { overflow-x: hidden; }
+.month-slide { transition: transform 0.2s ease, opacity 0.2s ease; }
+
 /* Header */
 .header {
   display: flex;
@@ -825,6 +829,9 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
   </div>
 </div>
 
+<!-- ===== 月コンテンツ（左右スワイプ時にスライド遷移する範囲。フローティングボタン/モーダルは含めない） ===== -->
+<div id="monthSlide" class="month-slide">
+
 <!-- Summary -->
 <div class="summary-grid" id="summaryGrid"></div>
 
@@ -908,6 +915,8 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
     <div class="payout-grid" id="payoutGrid"></div>
   </div>
 </div>
+
+</div><!-- /#monthSlide -->
 
 <button class="floating-today-btn" onclick="scrollToToday()">📝 本日の入力</button>
 <button class="scroll-top-btn" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="ページ上部へ">↑</button>
@@ -1167,7 +1176,30 @@ function changeMonthBySwipe(delta) {
   currentMonth = newMonth;
   const sel = document.getElementById('monthSelector');
   if (sel) sel.value = currentMonth;
-  render();
+
+  // ヌルっとスライド遷移（#30改良）：現在表示を進行方向へ流して消し、新しい月を逆側から滑り込ませる
+  const el = document.getElementById('monthSlide');
+  if (!el) { render(); return; }
+  const outX = delta > 0 ? -40 : 40;   // 次の月へ＝左へ流す / 前の月へ＝右へ流す
+  const inX  = delta > 0 ? 40 : -40;    // 新しい月の滑り込み開始位置
+  el.style.transition = 'transform 0.18s ease-in, opacity 0.18s ease-in';
+  el.style.transform = `translateX(${outX}px)`;
+  el.style.opacity = '0';
+  setTimeout(() => {
+    render();                                    // 新しい月の中身へ差し替え
+    el.style.transition = 'none';
+    el.style.transform = `translateX(${inX}px)`;
+    el.style.opacity = '0';
+    void el.offsetWidth;                          // リフロー強制（滑り込み開始位置を確定）
+    el.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+    el.style.transform = 'translateX(0)';
+    el.style.opacity = '1';
+    setTimeout(() => {                             // アニメ完了後にインラインスタイル除去（残留transform防止）
+      el.style.transition = '';
+      el.style.transform = '';
+      el.style.opacity = '';
+    }, 230);
+  }, 180);
 }
 
 // ============ STORAGE ============
@@ -3059,7 +3091,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v7';
+      const CACHE_NAME = 'delivery-dashboard-personal-v8';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
