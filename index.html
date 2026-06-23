@@ -770,6 +770,13 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
     <button class="btn" onclick="forceAppUpdate()" style="border-color:var(--accent);color:var(--accent);font-weight:700;">🔄 最新版に更新</button>
     <span style="font-size:12px;color:var(--text-dim);">現在 <span id="appVersionLabel" class="mono">-</span> ／ 押しても入力した数字は消えません</span>
   </div>
+  <div class="settings-row" style="align-items:center;">
+    <label>データ管理</label>
+    <button class="btn" onclick="exportData()" style="border-color:var(--accent);color:var(--accent);font-weight:700;">💾 データ書き出し</button>
+    <button class="btn" onclick="triggerImport()" style="border-color:var(--rocket);color:var(--rocket);font-weight:700;">📥 データ取り込み</button>
+    <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;" onchange="handleImportFile(this)">
+    <span style="font-size:12px;color:var(--text-dim);">機種変・PC⇔スマホの移行用（取り込みは上書きです）</span>
+  </div>
   <div class="settings-row">
     <label>目標金額（円）</label>
     <input type="text" inputmode="numeric" id="monthlyTarget" class="settings-amount" value="0"
@@ -1117,7 +1124,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-06-01 v10';
+const APP_BUILD = '2026-06-23 v11';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1140,6 +1147,77 @@ async function forceAppUpdate() {
 function setAppVersionLabel() {
   const vl = document.getElementById('appVersionLabel');
   if (vl) vl.textContent = APP_BUILD;
+}
+
+// ============ DATA EXPORT / IMPORT (#34 バックアップ・端末間移行) ============
+// localStorage を丸ごと1ファイルに書き出す。将来キーが増えても自動で含まれる。
+function exportData() {
+  try {
+    const dump = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      dump[k] = localStorage.getItem(k);
+    }
+    const payload = {
+      app: 'delivery-dashboard-v2',
+      type: 'backup',
+      version: APP_BUILD,
+      exportedAt: new Date().toISOString(),
+      data: dump
+    };
+    const now = new Date();
+    const p2 = function(n){ return String(n).padStart(2,'0'); };
+    const stamp = '' + now.getFullYear() + p2(now.getMonth()+1) + p2(now.getDate()) + '_' + p2(now.getHours()) + p2(now.getMinutes());
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '収入ダッシュボード_バックアップ_' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  } catch (e) {
+    alert('書き出しに失敗しました：' + (e && e.message ? e.message : e));
+  }
+}
+
+function triggerImport() {
+  const inp = document.getElementById('importFileInput');
+  if (inp) { inp.value = ''; inp.click(); }
+}
+
+function handleImportFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    let payload;
+    try {
+      payload = JSON.parse(e.target.result);
+    } catch (err) {
+      alert('ファイルを読み込めませんでした。正しいバックアップファイルか確認してください。');
+      return;
+    }
+    if (!payload || payload.app !== 'delivery-dashboard-v2' || !payload.data) {
+      alert('このアプリのバックアップファイルではないようです。取り込みを中止しました。');
+      return;
+    }
+    const keyCount = Object.keys(payload.data).length;
+    const when = payload.exportedAt ? String(payload.exportedAt).replace('T', ' ').slice(0, 16) : '不明';
+    if (!confirm('取り込むと、いまこの端末に入っているデータは上書きされます（合体ではありません）。\n\nバックアップ作成日時：' + when + '\n項目数：' + keyCount + '\n\n続けますか？')) return;
+    try {
+      const existing = [];
+      for (let i = 0; i < localStorage.length; i++) existing.push(localStorage.key(i));
+      existing.forEach(function(k){ localStorage.removeItem(k); });
+      Object.keys(payload.data).forEach(function(k){ localStorage.setItem(k, payload.data[k]); });
+      alert('取り込みが完了しました。画面を更新します。');
+      location.replace(location.origin + location.pathname + '?i=' + Date.now());
+    } catch (err) {
+      alert('取り込み中にエラーが発生しました：' + (err && err.message ? err.message : err));
+    }
+  };
+  reader.readAsText(file);
 }
 
 // ============ INIT ============
@@ -3125,7 +3203,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v10';
+      const CACHE_NAME = 'delivery-dashboard-personal-v11';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
