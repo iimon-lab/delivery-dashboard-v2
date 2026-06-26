@@ -604,8 +604,19 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 #tab-delivery .input-section { overflow-x: auto; }
 #deliveryHeader .input-row, #inputRows .input-row { min-width: max-content; }
 
-/* Floating Button: PC版非表示 */
-.floating-today-btn { display: none; }
+/* Floating Button: PC・スマホ両方で表示 */
+.floating-today-btn {
+  display: flex; align-items: center; justify-content: center;
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 50; height: 48px; padding: 0 28px; border: none; border-radius: 24px;
+  background: rgba(0, 212, 170, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  color: #000; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 700;
+  letter-spacing: 0.3px; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 212, 170, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s, box-shadow 0.15s; white-space: nowrap;
+}
+.floating-today-btn:active { transform: translateX(-50%) scale(0.95); }
+.hours-tap:focus, .dcal-hours:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* PC版：カード非表示 */
 .day-card { display: none; }
@@ -1166,7 +1177,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-06-26 v12';
+const APP_BUILD = '2026-06-26 v13';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1819,7 +1830,7 @@ function renderDeliveryRows() {
           onkeydown="onDailyKeydown(event)">`;
       }).join('')}
       <div class="hours-field">
-        <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
+        <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" tabindex="0" onkeydown="onHoursKeydown(event)" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
       </div>
       <input type="text" inputmode="numeric" class="daily-input" placeholder="0"
         data-day="${dd}" data-type="gas"
@@ -1864,7 +1875,7 @@ function renderDeliveryRows() {
           <span class="field-dot" style="background:var(--text-dim)"></span>
           <span class="field-label">稼働時間</span>
           <div class="hours-field">
-            <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
+            <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" tabindex="0" onkeydown="onHoursKeydown(event)" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
           </div>
         </div>
         <div class="day-card-field">
@@ -1973,17 +1984,17 @@ function renderDeliveryCalendar() {
       const raw = md.daily[dd][co.id] || 0;
       const disp = raw ? raw.toLocaleString() : '';
       inner += '<div class="dcal-row"><span class="dcal-lab" style="color:' + co.color + '">' + co.name + '</span>'
-        + '<input type="text" class="dcal-in daily-input" inputmode="numeric" placeholder="0" data-day="' + dd + '" data-co="' + co.id + '" data-type="daily" value="' + disp + '" oninput="onDailyInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"></div>';
+        + '<input type="text" class="dcal-in daily-input" inputmode="numeric" placeholder="0" data-day="' + dd + '" data-co="' + co.id + '" data-type="daily" value="' + disp + '" oninput="onDailyInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)" onkeydown="onDailyKeydown(event)"></div>';
     });
     if (rows.hours !== false) {
       const hv = md.hours[dd] ? (Math.floor(md.hours[dd] / 60) + ':' + String(md.hours[dd] % 60).padStart(2, '0')) : '-';
       inner += '<div class="dcal-row"><span class="dcal-lab" style="color:var(--text-dim)">⏱稼働</span>'
-        + '<div class="hours-tap dcal-hours' + (md.hours[dd] ? '' : ' empty') + '" data-day="' + dd + '" onclick="openDrumPicker(\'' + dd + '\')">' + hv + '</div></div>';
+        + '<div class="hours-tap dcal-hours' + (md.hours[dd] ? '' : ' empty') + '" tabindex="0" onkeydown="onHoursKeydown(event)" data-day="' + dd + '" onclick="openDrumPicker(\'' + dd + '\')">' + hv + '</div></div>';
     }
     if (rows.gas) {
       const gv = md.gas[dd] ? md.gas[dd].toLocaleString() : '';
       inner += '<div class="dcal-row"><span class="dcal-lab" style="color:var(--warning)">⛽</span>'
-        + '<input type="text" class="dcal-in daily-input" inputmode="numeric" placeholder="0" data-day="' + dd + '" data-type="gas" value="' + gv + '" oninput="onGasInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)" style="color:var(--danger)"></div>';
+        + '<input type="text" class="dcal-in daily-input" inputmode="numeric" placeholder="0" data-day="' + dd + '" data-type="gas" value="' + gv + '" oninput="onGasInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)" onkeydown="onDailyKeydown(event)" style="color:var(--danger)"></div>';
     }
     cells += '<div class="' + cls + '">' + inner + '</div>';
   }
@@ -2154,21 +2165,42 @@ function onDailyBlur(el) {
   el.value = num !== 0 ? num.toLocaleString() : '';
 }
 
+// 表示中（offsetParent有）の入力欄＋稼働時間枠を DOM順で収集（テーブル/カレンダー共通）
+let drumReturnEl = null;
+function getNavItems(node) {
+  let container = node.closest('#deliveryCalendarView') || node.closest('#inputRows');
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('.daily-input, .hours-tap')).filter(function(n){ return n.offsetParent !== null; });
+}
+function focusNavTarget(node) { if (node && node.focus) node.focus(); }
+
+// 稼働時間枠（ドラムタップ）にカーソルが来た状態でEnter/Space→ピッカーを開く。
+// キーボード経由で開いた場合は閉じたとき次の欄へ自動で進む。
+function onHoursKeydown(e) {
+  const tap = e.currentTarget;
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    const items = getNavItems(tap);
+    const idx = items.indexOf(tap);
+    drumReturnEl = (idx >= 0 && idx < items.length - 1) ? items[idx + 1] : null;
+    openDrumPicker(tap.dataset.day);
+  }
+}
+
 function onDailyKeydown(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
     const el = e.target;
-    if (!el.closest('.input-row')) return;
-    const allInputs = Array.from(document.querySelectorAll('#inputRows .input-row .daily-input'));
-    const idx = allInputs.indexOf(el);
+    const items = getNavItems(el);
+    const idx = items.indexOf(el);
+    let target = null;
     if (e.shiftKey && window.innerWidth > 768) {
-      if (idx > 0) { el.blur(); allInputs[idx - 1].focus(); } else { el.blur(); }
-    } else if (idx >= 0 && idx < allInputs.length - 1) {
-      el.blur();
-      allInputs[idx + 1].focus();
-    } else {
-      el.blur();
+      if (idx > 0) target = items[idx - 1];
+    } else if (idx >= 0 && idx < items.length - 1) {
+      target = items[idx + 1];
     }
+    if (el.blur) el.blur();
+    if (target) focusNavTarget(target);
     return;
   }
   const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
@@ -3152,6 +3184,11 @@ function drumClose() {
   if (el) el.classList.remove('open');
   document.body.style.overflow = '';
   drumTargetDay = null;
+  if (drumReturnEl) {
+    const t = drumReturnEl;
+    drumReturnEl = null;
+    setTimeout(function(){ if (t && t.focus) t.focus(); }, 60);
+  }
 }
 
 function updateHoursTapDisplay(day) {
@@ -3324,15 +3361,14 @@ function scrollToToday() {
   // 3. 今日の日付を2桁文字列で取得
   const dd = String(today.getDate()).padStart(2, '0');
 
-  // 4. 当日のday-card内の入力欄を検索してスクロール
+  // 4. 表示中ビューの当日要素へスクロール＋フォーカス（カレンダー/PCテーブル/スマホカード対応）
   setTimeout(() => {
-    const todayInput = document.querySelector(`#tab-delivery .day-card input[data-day="${dd}"]`);
-    if (todayInput) {
-      const card = todayInput.closest('.day-card');
-      if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => todayInput.focus(), 400);
-      }
+    const cand = Array.from(document.querySelectorAll(`#tab-delivery [data-day="${dd}"]`)).filter(n => n.offsetParent !== null);
+    const target = cand.length ? cand[0] : null;
+    if (target) {
+      const box = target.closest('.dcal-cell') || target.closest('.day-card') || target.closest('.input-row') || target;
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => { if (target.focus) target.focus(); }, 400);
     }
   }, 50);
 }
@@ -3358,7 +3394,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v12';
+      const CACHE_NAME = 'delivery-dashboard-personal-v13';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
