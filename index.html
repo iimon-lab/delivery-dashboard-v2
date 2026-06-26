@@ -748,6 +748,41 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
   .dr-overlay { background: rgba(0,0,0,0.95); }
   .dr-modal { max-width: 92vw; padding: 24px 20px 18px; }
 }
+
+/* ===== カレンダー入力ビュー（PC・行選択付き） ===== */
+.dcal-viewtabs{display:flex;gap:6px;margin:0 0 14px;}
+.dcal-vtab{padding:7px 16px;font-size:13px;font-weight:600;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;}
+.dcal-vtab.active{color:#000;background:var(--accent);border-color:var(--accent);}
+.dcal-rowselect{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:14px;font-size:13px;}
+.dcal-rs-lbl{color:var(--text-dim);font-weight:600;}
+.dcal-chip{border-radius:18px;padding:5px 12px;font-size:13px;font-weight:600;border:1px solid var(--border);cursor:pointer;user-select:none;}
+.dcal-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.dcal-chip.off{background:transparent;border-color:var(--border);color:#55556a;}
+.dcal-weekrow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px;}
+.dcal-weekrow span{text-align:center;font-size:12px;font-weight:600;color:var(--text-dim);}
+.dcal-weekrow .sun{color:#ff6b6b;} .dcal-weekrow .sat{color:#5b8def;}
+.dcal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
+.dcal-cell{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:8px 9px 7px;min-height:96px;position:relative;}
+.dcal-cell.empty{background:transparent;border:1px solid transparent;min-height:0;}
+.dcal-cell.today{border:2px solid var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
+.dcal-cell.hol{background:#1a1216;}
+.dcal-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.dcal-dnum{font-size:13px;font-weight:700;color:var(--text-dim);}
+.dcal-cell.sun .dcal-dnum{color:#ff6b6b;} .dcal-cell.sat .dcal-dnum{color:#5b8def;}
+.dcal-dow{font-size:10px;margin-left:3px;opacity:.8;}
+.dcal-badge{background:var(--accent);color:#000;font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;}
+.dcal-tot{margin-left:auto;font-size:13px;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace;}
+.dcal-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.dcal-lab{font-size:11px;font-weight:700;width:66px;flex:0 0 66px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dcal-in{flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;padding:4px 6px;text-align:right;}
+.dcal-in::placeholder{color:#3a3a4a;}
+.dcal-hours{flex:1;min-width:0;text-align:right;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;padding:4px 6px;cursor:pointer;}
+.dcal-hours.empty{color:#55556a;}
+@media (max-width:768px){
+  #deliveryCalendarView{display:none!important;}
+  #deliveryTableView{display:block!important;}
+  .dcal-viewtabs{display:none!important;}
+}
 </style>
 </head>
 <body>
@@ -894,8 +929,15 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 <div class="tab-content active" id="tab-delivery">
   <div class="input-section">
     <h2>📝 日別配達売上</h2>
-    <div id="deliveryHeader"></div>
-    <div id="inputRows"></div>
+    <div class="dcal-viewtabs">
+      <button type="button" class="dcal-vtab" id="dvTable" onclick="switchDeliveryView('table')">📋 テーブル</button>
+      <button type="button" class="dcal-vtab active" id="dvCal" onclick="switchDeliveryView('calendar')">🗓 カレンダー</button>
+    </div>
+    <div id="deliveryTableView">
+      <div id="deliveryHeader"></div>
+      <div id="inputRows"></div>
+    </div>
+    <div id="deliveryCalendarView"></div>
   </div>
 
 </div>
@@ -1124,7 +1166,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-06-23 v11';
+const APP_BUILD = '2026-06-26 v12';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1839,6 +1881,117 @@ function renderDeliveryRows() {
     `;
     container.appendChild(card);
   }
+  renderDeliveryCalendar();
+}
+
+// ============ DELIVERY CALENDAR VIEW (カレンダー入力・行選択) ============
+function loadCalRows() {
+  let v = {};
+  try { v = JSON.parse(localStorage.getItem('dd_cal_rows')) || {}; } catch(e) { v = {}; }
+  COMPANIES.forEach(function(co){ if (v[co.id] === undefined) v[co.id] = true; });
+  if (v.hours === undefined) v.hours = true;
+  if (v.gas === undefined) v.gas = false;
+  return v;
+}
+function saveCalRows(v) { localStorage.setItem('dd_cal_rows', JSON.stringify(v)); }
+function toggleCalRow(key) {
+  const v = loadCalRows();
+  v[key] = !v[key];
+  saveCalRows(v);
+  renderDeliveryCalendar();
+  recalcAll();
+}
+function loadDeliveryView() {
+  const s = localStorage.getItem('dd_delivery_view');
+  if (s === 'calendar' || s === 'table') return s;
+  return (window.innerWidth > 768) ? 'calendar' : 'table';
+}
+function switchDeliveryView(view) {
+  localStorage.setItem('dd_delivery_view', view);
+  renderDeliveryRows();
+  recalcAll();
+  applyDeliveryView();
+}
+function applyDeliveryView() {
+  let view = loadDeliveryView();
+  if (window.innerWidth <= 768) view = 'table'; // モバイルは常にテーブル/カード
+  const tv = document.getElementById('deliveryTableView');
+  const cv = document.getElementById('deliveryCalendarView');
+  const bt = document.getElementById('dvTable');
+  const bc = document.getElementById('dvCal');
+  if (!tv || !cv) return;
+  if (view === 'calendar') {
+    tv.style.display = 'none'; cv.style.display = 'block';
+    if (bt) bt.classList.remove('active');
+    if (bc) bc.classList.add('active');
+  } else {
+    tv.style.display = 'block'; cv.style.display = 'none';
+    if (bt) bt.classList.add('active');
+    if (bc) bc.classList.remove('active');
+  }
+}
+function renderDeliveryCalendar() {
+  const cv = document.getElementById('deliveryCalendarView');
+  if (!cv) return;
+  const md = getMonthData();
+  if (!md.daily) md.daily = {};
+  if (!md.hours) md.hours = {};
+  if (!md.gas) md.gas = {};
+  const rows = loadCalRows();
+  const days = getDaysInMonth(currentMonth);
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  const firstDow = getDow(currentMonth, 1);
+  const today = new Date();
+  const isCur = today.getFullYear() === cy && today.getMonth() + 1 === cm;
+  const todayD = isCur ? today.getDate() : 0;
+
+  let chips = '<span class="dcal-rs-lbl">表示する行：</span>';
+  COMPANIES.forEach(function(co){
+    const on = rows[co.id] !== false;
+    chips += '<span class="dcal-chip ' + (on ? 'on' : 'off') + '" onclick="toggleCalRow(\'' + co.id + '\')">' + (on ? '☑' : '☐') + ' ' + co.name + '</span>';
+  });
+  const hOn = rows.hours !== false;
+  chips += '<span class="dcal-chip ' + (hOn ? 'on' : 'off') + '" onclick="toggleCalRow(\'hours\')">' + (hOn ? '☑' : '☐') + ' ⏱稼働</span>';
+  const gOn = !!rows.gas;
+  chips += '<span class="dcal-chip ' + (gOn ? 'on' : 'off') + '" onclick="toggleCalRow(\'gas\')">' + (gOn ? '☑' : '☐') + ' ⛽ガソリン</span>';
+
+  let cells = '';
+  for (let i = 0; i < firstDow; i++) cells += '<div class="dcal-cell empty"></div>';
+  for (let d = 1; d <= days; d++) {
+    const dd = String(d).padStart(2, '0');
+    if (!md.daily[dd]) md.daily[dd] = {};
+    const dow = getDow(currentMonth, d);
+    const isHol = (md.holidays || []).includes(d);
+    let cls = 'dcal-cell';
+    if (dow === 0) cls += ' sun';
+    if (dow === 6) cls += ' sat';
+    if (d === todayD) cls += ' today';
+    if (isHol) cls += ' hol';
+    let inner = '<div class="dcal-head"><span class="dcal-dnum">' + d + '<span class="dcal-dow">' + DOW_JP[dow] + '</span></span>' + (d === todayD ? '<span class="dcal-badge">今日</span>' : '') + '<span class="dcal-tot" id="total-c-' + dd + '">¥0</span></div>';
+    COMPANIES.forEach(function(co){
+      if (rows[co.id] === false) return;
+      const raw = md.daily[dd][co.id] || 0;
+      const disp = raw ? raw.toLocaleString() : '';
+      inner += '<div class="dcal-row"><span class="dcal-lab" style="color:' + co.color + '">' + co.name + '</span>'
+        + '<input type="text" class="dcal-in daily-input" inputmode="numeric" placeholder="0" data-day="' + dd + '" data-co="' + co.id + '" data-type="daily" value="' + disp + '" oninput="onDailyInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"></div>';
+    });
+    if (rows.hours !== false) {
+      const hv = md.hours[dd] ? (Math.floor(md.hours[dd] / 60) + ':' + String(md.hours[dd] % 60).padStart(2, '0')) : '-';
+      inner += '<div class="dcal-row"><span class="dcal-lab" style="color:var(--text-dim)">⏱稼働</span>'
+        + '<div class="hours-tap dcal-hours' + (md.hours[dd] ? '' : ' empty') + '" data-day="' + dd + '" onclick="openDrumPicker(\'' + dd + '\')">' + hv + '</div></div>';
+    }
+    if (rows.gas) {
+      const gv = md.gas[dd] ? md.gas[dd].toLocaleString() : '';
+      inner += '<div class="dcal-row"><span class="dcal-lab" style="color:var(--warning)">⛽</span>'
+        + '<input type="text" class="dcal-in daily-input" inputmode="numeric" placeholder="0" data-day="' + dd + '" data-type="gas" value="' + gv + '" oninput="onGasInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)" style="color:var(--danger)"></div>';
+    }
+    cells += '<div class="' + cls + '">' + inner + '</div>';
+  }
+
+  cv.innerHTML = '<div class="dcal-rowselect">' + chips + '</div>'
+    + '<div class="dcal-weekrow"><span class="sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span></div>'
+    + '<div class="dcal-grid">' + cells + '</div>';
+  applyDeliveryView();
 }
 
 function renderMainJobIncome() {
@@ -2212,6 +2365,8 @@ function recalcAll() {
     if (el) { el.textContent = totalText; el.style.color = totalColor; el.style.fontSize = totalFontSize; }
     const elM = document.getElementById(`total-m-${dd}`);
     if (elM) { elM.textContent = totalText; elM.style.color = totalColor; elM.style.fontSize = totalFontSize; }
+    const elC = document.getElementById(`total-c-${dd}`);
+    if (elC) { elC.textContent = totalText; elC.style.color = totalColor; }
 
     // 日計ボタン表示制御
     const drBtn = document.getElementById(`dr-btn-${dd}`);
@@ -3203,7 +3358,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v11';
+      const CACHE_NAME = 'delivery-dashboard-personal-v12';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
