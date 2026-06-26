@@ -794,6 +794,35 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
   #deliveryTableView{display:block!important;}
   .dcal-viewtabs{display:none!important;}
 }
+
+/* ===== ライトモード（data-theme=light） ===== */
+:root[data-theme="light"]{
+  --bg:#f3f4f6; --surface:#ffffff; --surface2:#eceef1; --border:#d7dbe0;
+  --text:#1b1e26; --text-dim:#5f6571;
+  --accent:#00a884; --accent-dim:#00a8841f; --success:#00a884;
+  --danger:#e53950; --warning:#c77f00; --rocket:#3b6fd0;
+}
+:root[data-theme="light"] body{ background:var(--bg); color:var(--text); }
+/* ハードコード暗色の上書き */
+:root[data-theme="light"] .no-payout-field input,
+:root[data-theme="light"] input.daily-input.no-payout-input,
+:root[data-theme="light"] .holiday-cell.no-payout{ background:#e4e7eb !important; }
+:root[data-theme="light"] .holiday-cell.no-payout.holiday{ background:#f3d6d6 !important; }
+:root[data-theme="light"] .source-manager{ background:#f0f2f5; }
+:root[data-theme="light"] .source-manager h3{ color:#5f6571; }
+:root[data-theme="light"] .source-item{ background:#ffffff; border:1px solid #d7dbe0; }
+:root[data-theme="light"] .source-item input{ background:#ffffff; border:1px solid #c7ccd4; color:#1b1e26; }
+:root[data-theme="light"] .source-item .delete-btn,
+:root[data-theme="light"] .source-item .drag-handle{ color:#9aa0aa; }
+:root[data-theme="light"] .add-source-btn{ background:#eceef1; border:1px dashed #c0c5cc; color:#5f6571; }
+:root[data-theme="light"] .add-source-btn:hover{ background:#e2e5ea; color:#3a3f49; }
+:root[data-theme="light"] .dcal-cell.hol{ background:#fbeaea; }
+:root[data-theme="light"] .dcal-in::placeholder{ color:#b3b8c0; }
+:root[data-theme="light"] .dcal-chip.off{ color:#9aa0aa; }
+:root[data-theme="light"] .dcal-hours.empty{ color:#9aa0aa; }
+:root[data-theme="light"] .holiday-legend-swatch[style*="background:#333"]{ background:#cbd0d6 !important; }
+/* テーマ切替ボタン */
+.theme-btn.active{ background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
 </style>
 </head>
 <body>
@@ -811,6 +840,12 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 <div style="text-align:right; font-size:11px; color:var(--text-dim); margin-top:-18px; margin-bottom:16px; padding-right:4px;">※ 入力内容は自動保存されます</div>
 
 <div class="settings-section" id="settingsSection" style="display:none;">
+  <div class="settings-row" style="align-items:center;">
+    <label>テーマ</label>
+    <button class="btn theme-btn" id="themeDark" onclick="setTheme('dark')">🌙 ダーク</button>
+    <button class="btn theme-btn" id="themeLight" onclick="setTheme('light')">☀️ ライト</button>
+    <span style="font-size:12px;color:var(--text-dim);">画面の明るさを切り替えます</span>
+  </div>
   <div class="settings-row" style="align-items:center;">
     <label>アプリ更新</label>
     <button class="btn" onclick="forceAppUpdate()" style="border-color:var(--accent);color:var(--accent);font-weight:700;">🔄 最新版に更新</button>
@@ -1177,7 +1212,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-06-26 v13';
+const APP_BUILD = '2026-06-26 v14';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1275,6 +1310,7 @@ function handleImportFile(input) {
 
 // ============ INIT ============
 function init() {
+  loadTheme();
   const now = new Date();
   currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('monthSelector').value = currentMonth;
@@ -1614,6 +1650,23 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ============ THEME (ダーク/ライト) ============
+function setTheme(t) {
+  const theme = (t === 'light') ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('dd_theme', theme); } catch(e) {}
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f4f6' : '#0a0a0f');
+  const bd = document.getElementById('themeDark'), bl = document.getElementById('themeLight');
+  if (bd) bd.classList.toggle('active', theme === 'dark');
+  if (bl) bl.classList.toggle('active', theme === 'light');
+}
+function loadTheme() {
+  let t = 'dark';
+  try { t = localStorage.getItem('dd_theme') || 'dark'; } catch(e) {}
+  setTheme(t);
 }
 
 function toggleSettings() {
@@ -3394,7 +3447,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v13';
+      const CACHE_NAME = 'delivery-dashboard-personal-v14';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
