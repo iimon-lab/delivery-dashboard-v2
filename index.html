@@ -608,8 +608,8 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 #tab-delivery .input-section { overflow-x: auto; }
 #deliveryHeader .input-row, #inputRows .input-row { min-width: max-content; }
 @media (min-width: 769px) {
-  #deliveryTableView { max-height: calc(100vh - 210px); overflow: auto; }
-  #deliveryHeader { position: sticky; top: 0; z-index: 6; background: var(--bg); }
+  #tab-delivery .input-section { overflow-x: visible; }
+  #deliveryHeader { position: sticky; top: 0; z-index: 20; background: var(--bg); box-shadow: 0 3px 8px rgba(0,0,0,0.45); }
 }
 
 /* Floating Button: PC・スマホ両方で表示 */
@@ -1220,7 +1220,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-25 v16';
+const APP_BUILD = '2026-07-25 v17';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2575,15 +2575,18 @@ function recalcAll() {
     daysUntilPayLabel = '未設定';
   }
 
-  // #35 余剰金（黒字時＝繰り上げ返済の原資）：全収入 − ガソリン − 目標(必要額)
+  const achieved = grandTotal >= target && target > 0;
+  const remainingLabel = achieved ? '達成！' : `¥${remaining.toLocaleString()}`;
+  const remainingColor = achieved ? 'var(--success)' : 'var(--danger)';
+  const remainingSub = `目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}`;
+  // #35 余剰金（繰り上げ返済の原資）：全収入 − ガソリン − 目標。常時表示（黒字でなければ¥0）
   const surplus = (target > 0) ? (grandTotal - gasTotal - target) : 0;
-  const hasSurplus = target > 0 && surplus > 0;
-  const remainingCardLabel = hasSurplus ? '余剰金' : 'あと';
-  const remainingLabel = hasSurplus ? `¥${surplus.toLocaleString()}` : `¥${remaining.toLocaleString()}`;
-  const remainingColor = hasSurplus ? 'var(--success)' : 'var(--danger)';
-  const remainingSub = hasSurplus
+  const hasSurplus = surplus > 0;
+  const surplusLabel = hasSurplus ? `¥${surplus.toLocaleString()}` : '¥0';
+  const surplusColor = hasSurplus ? 'var(--success)' : 'var(--text-dim)';
+  const surplusSub = hasSurplus
     ? `繰り上げ返済の原資 / 全収入 ¥${grandTotal.toLocaleString()} − ⛽¥${gasTotal.toLocaleString()} − 目標 ¥${target.toLocaleString()}`
-    : `目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}`;
+    : (target > 0 ? `黒字なし（必要額まであと ¥${Math.max(0, target - (grandTotal - gasTotal)).toLocaleString()}）` : '⚙で目標を設定');
 
   // Summary
   const showMJ = isMainJobVisible();
@@ -2621,9 +2624,14 @@ function recalcAll() {
       <div class="summary-sub">${daysUntilPaySub}</div>
     </div>
     <div class="summary-card remaining">
-      <div class="summary-label">${remainingCardLabel}</div>
+      <div class="summary-label">あと</div>
       <div class="summary-value" style="color:${remainingColor}">${remainingLabel}</div>
       <div class="summary-sub">${remainingSub}</div>
+    </div>
+    <div class="summary-card" style="border-left:3px solid var(--success);">
+      <div class="summary-label">余剰金（繰り上げ返済へ）</div>
+      <div class="summary-value" style="color:${surplusColor}">${surplusLabel}</div>
+      <div class="summary-sub">${surplusSub}</div>
     </div>
     <div class="summary-card daily">
       <div class="summary-label">日別目標</div>
@@ -3495,7 +3503,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v16';
+      const CACHE_NAME = 'delivery-dashboard-personal-v17';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
