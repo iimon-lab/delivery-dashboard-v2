@@ -1220,7 +1220,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-25 v20';
+const APP_BUILD = '2026-07-25 v21';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2594,12 +2594,18 @@ function recalcAll() {
   const subParts = [`配達 ¥${deliveryTotal.toLocaleString()}`];
   if (showMJ) subParts.push(`本業 ¥${mainJobAmount.toLocaleString()}`);
   if (showEx) subParts.push(`他 ¥${extraTotal.toLocaleString()}`);
+  // 案B：全収入合計カードは支払いベース(繰越込)を主表示。内訳は進捗バーと一致
+  const subPartsEff = [`配達 ¥${deliveryTotalEffective.toLocaleString()}`];
+  if (carryover > 0) subPartsEff.push(`前月繰越 ¥${carryover.toLocaleString()}`);
+  if (showMJ) subPartsEff.push(`本業 ¥${mainJobAmount.toLocaleString()}`);
+  if (showEx) subPartsEff.push(`他 ¥${extraTotal.toLocaleString()}`);
 
   document.getElementById('summaryGrid').innerHTML = `
     <div class="summary-card total">
       <div class="summary-label">全収入合計</div>
-      <div class="summary-value" style="color:var(--accent)">¥${grandTotal.toLocaleString()}</div>
-      <div class="summary-sub">${subParts.join(' / ')}</div>
+      <div class="summary-value" style="color:var(--accent)">¥${grandTotalEffective.toLocaleString()}</div>
+      <div class="summary-sub">${subPartsEff.join(' / ')}</div>
+      ${grandTotalEffective !== grandTotal ? `<div class="summary-sub" style="color:var(--text-dim);">今月稼いだ額 ¥${grandTotal.toLocaleString()}</div>` : ''}
     </div>
     <div class="summary-card delivery">
       <div class="summary-label">配達収入</div>
@@ -3503,7 +3509,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v20';
+      const CACHE_NAME = 'delivery-dashboard-personal-v21';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
