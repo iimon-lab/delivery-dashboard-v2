@@ -1220,7 +1220,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-25 v21';
+const APP_BUILD = '2026-07-26 v22';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1886,13 +1886,13 @@ function renderDeliveryRows() {
         const payDate = goalDate ? getPayoutDateForDay(d, gy, gm, co) : null;
         const isGrey = payDate !== null && goalDate && payDate > goalDate;
         const cntPc = ((md.counts || {})[dd] || {})[co.id] || 0;
-        return `<div class="co-cell"><input type="text" class="daily-input${isGrey ? ' no-payout-input' : ''}" inputmode="numeric" placeholder="0"
+        return `<div class="co-cell"><input type="text" class="count-input" inputmode="numeric" placeholder="件数"
+          data-day="${dd}" data-co="${co.id}" value="${cntPc ? cntPc : ''}" oninput="onCountInput(this)"
+          onfocus="onDailyFocus(this)" onkeydown="onDailyKeydown(event)"><input type="text" class="daily-input${isGrey ? ' no-payout-input' : ''}" inputmode="numeric" placeholder="0"
           data-day="${dd}" data-co="${co.id}" data-type="daily"
           value="${dispVal}" oninput="onDailyInput(this)"
           onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"
-          onkeydown="onDailyKeydown(event)"><input type="text" class="count-input" inputmode="numeric" placeholder="件数"
-          data-day="${dd}" data-co="${co.id}" value="${cntPc ? cntPc : ''}" oninput="onCountInput(this)"
-          onfocus="onDailyFocus(this)" onkeydown="onDailyKeydown(event)"></div>`;
+          onkeydown="onDailyKeydown(event)"></div>`;
       }).join('')}
       <div class="hours-field">
         <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" tabindex="0" onkeydown="onHoursKeydown(event)" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
@@ -1929,15 +1929,15 @@ function renderDeliveryRows() {
           <div class="day-card-field${isGrey ? ' no-payout-field' : ''}">
             <span class="field-dot" style="background:${co.color}"></span>
             <span class="field-label">${co.name}</span>
+            <input type="text" class="count-input" inputmode="numeric" placeholder="件数"
+              data-day="${dd}" data-co="${co.id}"
+              value="${(() => { const c = ((md.counts||{})[dd]||{})[co.id] || 0; return c ? c : ''; })()}"
+              oninput="onCountInput(this)" onfocus="onDailyFocus(this)" onkeydown="onDailyKeydown(event)">
             <input type="text" class="daily-input" inputmode="numeric" placeholder="0"
               data-day="${dd}" data-co="${co.id}" data-type="daily"
               value="${(() => { const v = md.daily[dd][co.id] || 0; return v ? v.toLocaleString() : ''; })()}"
               oninput="onDailyInput(this)" onfocus="onDailyFocus(this)"
               onblur="onDailyBlur(this)" onkeydown="onDailyKeydown(event)">
-            <input type="text" class="count-input" inputmode="numeric" placeholder="件数"
-              data-day="${dd}" data-co="${co.id}"
-              value="${(() => { const c = ((md.counts||{})[dd]||{})[co.id] || 0; return c ? c : ''; })()}"
-              oninput="onCountInput(this)" onfocus="onDailyFocus(this)" onkeydown="onDailyKeydown(event)">
           </div>`;
         }).join('')}
         <div class="day-card-field">
@@ -2251,7 +2251,7 @@ let drumReturnEl = null;
 function getNavItems(node) {
   let container = node.closest('#deliveryCalendarView') || node.closest('#inputRows');
   if (!container) return [];
-  return Array.from(container.querySelectorAll('.daily-input, .hours-tap')).filter(function(n){ return n.offsetParent !== null; });
+  return Array.from(container.querySelectorAll('.count-input, .daily-input, .hours-tap')).filter(function(n){ return n.offsetParent !== null; });
 }
 function focusNavTarget(node) { if (node && node.focus) node.focus(); }
 
@@ -3509,7 +3509,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v21';
+      const CACHE_NAME = 'delivery-dashboard-personal-v22';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
