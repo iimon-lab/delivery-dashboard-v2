@@ -1221,7 +1221,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-26 v23';
+const APP_BUILD = '2026-07-26 v24';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1480,7 +1480,7 @@ function renderExpenseItems() {
         onchange="updateExpenseItem(${i}, 'name', this.value)">
       <input type="text" inputmode="numeric" class="expense-amount" value="${item.amount ? Number(item.amount).toLocaleString() : ''}" placeholder="0"
         onfocus="onExpenseFocus(this)" onblur="onExpenseBlur(this, ${i})"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+        onkeydown="onExpenseAmountKeydown(event, this)">
       <span style="font-size:12px;color:var(--text-dim);white-space:nowrap;">円</span>
       <button class="remove-btn" onclick="removeExpenseItem(${i})">✕</button>
     </div>
@@ -1498,6 +1498,16 @@ function onExpenseBlur(el, index) {
   const v = parseInt(String(el.value).replace(/,/g, '')) || 0;
   el.value = v ? v.toLocaleString() : '';
   updateExpenseItem(index, 'amount', v);
+}
+
+// 支出金額欄：Enterで次の金額欄へ（Shift+Enterで前へ）。次欄focusで現在値はonblurで確定。
+function onExpenseAmountKeydown(e, el) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const inputs = Array.from(document.querySelectorAll('#expenseItemList .expense-amount'));
+  const idx = inputs.indexOf(el);
+  const next = inputs[e.shiftKey ? idx - 1 : idx + 1];
+  if (next) { next.focus(); } else { el.blur(); }
 }
 
 function addExpenseItem() {
@@ -3548,7 +3558,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v23';
+      const CACHE_NAME = 'delivery-dashboard-personal-v24';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
