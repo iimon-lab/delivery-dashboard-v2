@@ -1212,7 +1212,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-06-26 v14';
+const APP_BUILD = '2026-07-25 v15';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2535,8 +2535,14 @@ function recalcAll() {
   }
 
   const achieved = grandTotal >= target && target > 0;
-  const remainingLabel = achieved ? '達成！' : `¥${remaining.toLocaleString()}`;
+  // #35 余剰金（黒字時＝繰り上げ返済の原資）：全収入合計 − 目標(必要額)
+  const surplus = achieved ? (grandTotal - target) : 0;
+  const remainingCardLabel = achieved ? '余剰金' : 'あと';
+  const remainingLabel = achieved ? `¥${surplus.toLocaleString()}` : `¥${remaining.toLocaleString()}`;
   const remainingColor = achieved ? 'var(--success)' : 'var(--danger)';
+  const remainingSub = achieved
+    ? `繰り上げ返済の原資 / 全収入 ¥${grandTotal.toLocaleString()} − 目標 ¥${target.toLocaleString()}`
+    : `目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}`;
 
   // Summary
   const showMJ = isMainJobVisible();
@@ -2573,9 +2579,9 @@ function recalcAll() {
       <div class="summary-sub">${daysUntilPaySub}</div>
     </div>
     <div class="summary-card remaining">
-      <div class="summary-label">あと</div>
+      <div class="summary-label">${remainingCardLabel}</div>
       <div class="summary-value" style="color:${remainingColor}">${remainingLabel}</div>
-      <div class="summary-sub">目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}</div>
+      <div class="summary-sub">${remainingSub}</div>
     </div>
     <div class="summary-card daily">
       <div class="summary-label">日別目標</div>
@@ -3447,7 +3453,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v14';
+      const CACHE_NAME = 'delivery-dashboard-personal-v15';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
