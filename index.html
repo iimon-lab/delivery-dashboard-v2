@@ -201,6 +201,10 @@ input[type="number"]:focus, input[type="text"]:focus {
 .input-row input[type="number"], .input-row input.daily-input { font-size: 18px; padding: 10px 12px; max-width: 130px; justify-self: start; }
 .day-card-field input[type="number"], .day-card-field input.daily-input { font-size: 17px; padding: 10px 12px; max-width: 180px; }
 input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace; -moz-appearance: textfield; }
+.co-cell { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
+.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-family: 'JetBrains Mono', monospace; color: var(--text-dim); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; max-width: 130px; -moz-appearance: textfield; }
+.count-input::placeholder { font-size: 11px; }
+.day-card-field .count-input { max-width: 76px; flex: 0 0 auto; }
 
 /* Side Income Section */
 .side-grid {
@@ -603,6 +607,10 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 /* PC版：配達入力の横スクロール対応 */
 #tab-delivery .input-section { overflow-x: auto; }
 #deliveryHeader .input-row, #inputRows .input-row { min-width: max-content; }
+@media (min-width: 769px) {
+  #deliveryTableView { max-height: calc(100vh - 210px); overflow: auto; }
+  #deliveryHeader { position: sticky; top: 0; z-index: 6; background: var(--bg); }
+}
 
 /* Floating Button: PC・スマホ両方で表示 */
 .floating-today-btn {
@@ -1212,7 +1220,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-25 v15';
+const APP_BUILD = '2026-07-25 v16';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1405,11 +1413,12 @@ function changeMonthBySwipe(delta) {
 
 // ============ STORAGE ============
 function getMonthData() {
-  if (!data[currentMonth]) data[currentMonth] = { daily: {}, side: {}, extraFixed: {}, extraItems: [], mainJobItems: [], holidays: [], hours: {}, gas: {} };
+  if (!data[currentMonth]) data[currentMonth] = { daily: {}, side: {}, extraFixed: {}, extraItems: [], mainJobItems: [], holidays: [], hours: {}, gas: {}, counts: {} };
   const md = data[currentMonth];
   if (!md.holidays) md.holidays = [];
   if (!md.hours) md.hours = {};
   if (!md.gas) md.gas = {};
+  if (!md.counts) md.counts = {};
   return md;
 }
 
@@ -1876,11 +1885,14 @@ function renderDeliveryRows() {
         const dispVal = rawVal ? rawVal.toLocaleString() : '';
         const payDate = goalDate ? getPayoutDateForDay(d, gy, gm, co) : null;
         const isGrey = payDate !== null && goalDate && payDate > goalDate;
-        return `<input type="text" class="daily-input${isGrey ? ' no-payout-input' : ''}" inputmode="numeric" placeholder="0"
+        const cntPc = ((md.counts || {})[dd] || {})[co.id] || 0;
+        return `<div class="co-cell"><input type="text" class="daily-input${isGrey ? ' no-payout-input' : ''}" inputmode="numeric" placeholder="0"
           data-day="${dd}" data-co="${co.id}" data-type="daily"
           value="${dispVal}" oninput="onDailyInput(this)"
           onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"
-          onkeydown="onDailyKeydown(event)">`;
+          onkeydown="onDailyKeydown(event)"><input type="text" class="count-input" inputmode="numeric" placeholder="件数"
+          data-day="${dd}" data-co="${co.id}" value="${cntPc ? cntPc : ''}" oninput="onCountInput(this)"
+          onfocus="onDailyFocus(this)" onkeydown="onDailyKeydown(event)"></div>`;
       }).join('')}
       <div class="hours-field">
         <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" tabindex="0" onkeydown="onHoursKeydown(event)" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
@@ -1922,6 +1934,10 @@ function renderDeliveryRows() {
               value="${(() => { const v = md.daily[dd][co.id] || 0; return v ? v.toLocaleString() : ''; })()}"
               oninput="onDailyInput(this)" onfocus="onDailyFocus(this)"
               onblur="onDailyBlur(this)" onkeydown="onDailyKeydown(event)">
+            <input type="text" class="count-input" inputmode="numeric" placeholder="件数"
+              data-day="${dd}" data-co="${co.id}"
+              value="${(() => { const c = ((md.counts||{})[dd]||{})[co.id] || 0; return c ? c : ''; })()}"
+              oninput="onCountInput(this)" onfocus="onDailyFocus(this)" onkeydown="onDailyKeydown(event)">
           </div>`;
         }).join('')}
         <div class="day-card-field">
@@ -2203,6 +2219,18 @@ function onDailyInput(el) {
   const day = el.dataset.day, co = el.dataset.co;
   if (!md.daily[day]) md.daily[day] = {};
   md.daily[day][co] = parseDailyValue(el.value);
+  recalcAll();
+  saveData();
+}
+
+// #24 配達件数の入力（業者別）。1件単価＝売上÷件数の算出に使用
+function onCountInput(el) {
+  const md = getMonthData();
+  if (!md.counts) md.counts = {};
+  const day = el.dataset.day, co = el.dataset.co;
+  if (!md.counts[day]) md.counts[day] = {};
+  const v = parseInt(String(el.value).replace(/[^0-9]/g, '')) || 0;
+  if (v > 0) md.counts[day][co] = v; else delete md.counts[day][co];
   recalcAll();
   saveData();
 }
@@ -2491,6 +2519,19 @@ function recalcAll() {
   }
   const netDelivery = deliveryTotal - gasTotal;
 
+  // #24 配達件数・1件単価（業者別・全体）
+  let totalCount = 0;
+  const coCount = {}, coAmt = {};
+  COMPANIES.forEach(c => { coCount[c.id] = 0; coAmt[c.id] = 0; });
+  for (let di = 1; di <= days; di++) {
+    const ddi = String(di).padStart(2, '0');
+    const cnts = (md.counts || {})[ddi] || {};
+    const dayd = (md.daily || {})[ddi] || {};
+    COMPANIES.forEach(c => { const n = cnts[c.id] || 0; totalCount += n; coCount[c.id] += n; coAmt[c.id] += (dayd[c.id] || 0); });
+  }
+  const unitOverall = totalCount > 0 ? Math.round(deliveryTotal / totalCount) : 0;
+  const perCoStr = COMPANIES.filter(c => coCount[c.id] > 0).map(c => `${c.name} @¥${Math.round(coAmt[c.id] / coCount[c.id]).toLocaleString()}`).join(' ・ ');
+
   const grandTotal = deliveryTotal + mainJobAmount + extraTotal;
   const grandTotalEffective = deliveryTotalEffective + mainJobAmount + extraTotal + carryover;
   const remaining = Math.max(0, target - grandTotalEffective);
@@ -2534,14 +2575,14 @@ function recalcAll() {
     daysUntilPayLabel = '未設定';
   }
 
-  const achieved = grandTotal >= target && target > 0;
-  // #35 余剰金（黒字時＝繰り上げ返済の原資）：全収入合計 − 目標(必要額)
-  const surplus = achieved ? (grandTotal - target) : 0;
-  const remainingCardLabel = achieved ? '余剰金' : 'あと';
-  const remainingLabel = achieved ? `¥${surplus.toLocaleString()}` : `¥${remaining.toLocaleString()}`;
-  const remainingColor = achieved ? 'var(--success)' : 'var(--danger)';
-  const remainingSub = achieved
-    ? `繰り上げ返済の原資 / 全収入 ¥${grandTotal.toLocaleString()} − 目標 ¥${target.toLocaleString()}`
+  // #35 余剰金（黒字時＝繰り上げ返済の原資）：全収入 − ガソリン − 目標(必要額)
+  const surplus = (target > 0) ? (grandTotal - gasTotal - target) : 0;
+  const hasSurplus = target > 0 && surplus > 0;
+  const remainingCardLabel = hasSurplus ? '余剰金' : 'あと';
+  const remainingLabel = hasSurplus ? `¥${surplus.toLocaleString()}` : `¥${remaining.toLocaleString()}`;
+  const remainingColor = hasSurplus ? 'var(--success)' : 'var(--danger)';
+  const remainingSub = hasSurplus
+    ? `繰り上げ返済の原資 / 全収入 ¥${grandTotal.toLocaleString()} − ⛽¥${gasTotal.toLocaleString()} − 目標 ¥${target.toLocaleString()}`
     : `目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}`;
 
   // Summary
@@ -2562,6 +2603,7 @@ function recalcAll() {
       <div class="summary-value" style="color:var(--uber)">¥${deliveryTotal.toLocaleString()}</div>
       <div class="summary-sub">${daysWorked}日稼働 / 日平均 ¥${avgPerDay.toLocaleString()}${totalMinutes > 0 ? ` / ${formatHoursMinutes(totalMinutes)} / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>
       ${gasTotal > 0 ? `<div class="summary-sub" style="color:var(--text-dim);">⛽ −¥${gasTotal.toLocaleString()} → 実質 ¥${netDelivery.toLocaleString()}</div>` : ''}
+      ${totalCount > 0 ? `<div class="summary-sub" style="color:var(--text-dim);">🧮 ${totalCount}件 / 全体 @¥${unitOverall.toLocaleString()}/件${perCoStr ? ' ・ ' + perCoStr : ''}</div>` : ''}
     </div>
     ${showMJ ? `<div class="summary-card" style="border-left:3px solid ${MAIN_JOB_COLOR};">
       <div class="summary-label">本業収入</div>
@@ -3453,7 +3495,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v15';
+      const CACHE_NAME = 'delivery-dashboard-personal-v16';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
