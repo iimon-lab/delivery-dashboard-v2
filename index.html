@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>収入管理ダッシュボード</title>
 <!-- PWA meta tags -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -550,6 +550,7 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
   scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain;
 }
 .drum-col::-webkit-scrollbar { display: none; }
+.drum-col-active { background: rgba(0,168,132,0.14); border-radius: 8px; }
 .drum-item {
   height: 40px; display: flex; align-items: center; justify-content: center;
   font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 500;
@@ -1220,7 +1221,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-26 v22';
+const APP_BUILD = '2026-07-26 v23';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2261,6 +2262,7 @@ function onHoursKeydown(e) {
   const tap = e.currentTarget;
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
+    e.stopPropagation();
     const items = getNavItems(tap);
     const idx = items.indexOf(tap);
     drumReturnEl = (idx >= 0 && idx < items.length - 1) ? items[idx + 1] : null;
@@ -3211,6 +3213,7 @@ function initDrumPicker() {
   // Scroll listeners to highlight selected
   hCol.addEventListener('scroll', () => drumUpdateSelection(hCol));
   mCol.addEventListener('scroll', () => drumUpdateSelection(mCol));
+  document.addEventListener('keydown', onDrumKeydown);
 }
 
 function drumUpdateSelection(col) {
@@ -3256,6 +3259,7 @@ function openDrumPicker(day) {
 
   document.body.style.overflow = 'hidden';
   document.getElementById('drumOverlay').classList.add('open');
+  drumSetActiveCol('drumHourCol');
   // Scroll to current values after render
   requestAnimationFrame(() => {
     drumScrollTo('drumHourCol', h);
@@ -3303,6 +3307,41 @@ function drumClose() {
     const t = drumReturnEl;
     drumReturnEl = null;
     setTimeout(function(){ if (t && t.focus) t.focus(); }, 60);
+  }
+}
+
+// PCキーボードで稼働時間ドラムを操作（↑↓＝値を1つ移動／←→＝時・分の列切替／Enter＝完了／Esc＝取消）
+let drumActiveCol = 'drumHourCol';
+function drumSetActiveCol(colId) {
+  drumActiveCol = colId;
+  const h = document.getElementById('drumHourCol');
+  const m = document.getElementById('drumMinCol');
+  if (h) h.classList.toggle('drum-col-active', colId === 'drumHourCol');
+  if (m) m.classList.toggle('drum-col-active', colId === 'drumMinCol');
+}
+function drumStep(colId, dir) {
+  const col = document.getElementById(colId);
+  if (!col) return;
+  const items = Array.from(col.querySelectorAll('.drum-item[data-val]'));
+  if (!items.length) return;
+  const cur = col.querySelector('.drum-item.selected');
+  let idx = cur ? items.indexOf(cur) : 0;
+  if (idx < 0) idx = 0;
+  let ni = idx + dir;
+  if (ni < 0) ni = 0;
+  if (ni > items.length - 1) ni = items.length - 1;
+  drumScrollTo(colId, parseInt(items[ni].dataset.val));
+}
+function onDrumKeydown(e) {
+  const overlay = document.getElementById('drumOverlay');
+  if (!overlay || !overlay.classList.contains('open')) return;
+  switch (e.key) {
+    case 'ArrowUp': e.preventDefault(); drumStep(drumActiveCol, -1); break;
+    case 'ArrowDown': e.preventDefault(); drumStep(drumActiveCol, 1); break;
+    case 'ArrowLeft': e.preventDefault(); drumSetActiveCol('drumHourCol'); break;
+    case 'ArrowRight': e.preventDefault(); drumSetActiveCol('drumMinCol'); break;
+    case 'Enter': e.preventDefault(); drumDone(); break;
+    case 'Escape': e.preventDefault(); drumCancel(); break;
   }
 }
 
@@ -3509,7 +3548,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v22';
+      const CACHE_NAME = 'delivery-dashboard-personal-v23';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
