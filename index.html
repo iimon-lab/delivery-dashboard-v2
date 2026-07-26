@@ -940,7 +940,7 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 <!-- Progress -->
 <div class="progress-section">
   <div class="progress-header">
-    <span>月間進捗（全収入合計）</span>
+    <span>月間進捗（目標に充てる収入）</span>
     <span style="display:flex;align-items:center;gap:8px;">
       <span id="paceIndicator"></span>
       <span id="progressLabel" class="mono">0%</span>
@@ -1221,7 +1221,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-26 v26';
+const APP_BUILD = '2026-07-26 v27';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2606,20 +2606,20 @@ function recalcAll() {
   if (showMJ) subParts.push(`本業 ¥${mainJobAmount.toLocaleString()}`);
   if (showEx) subParts.push(`他 ¥${extraTotal.toLocaleString()}`);
   // 案B：全収入合計カードは支払いベース(繰越込)を主表示。内訳は進捗バーと一致
-  const subPartsEff = [`配達 ¥${deliveryTotalEffective.toLocaleString()}`];
+  const subPartsEff = [`配達（支払い分） ¥${deliveryTotalEffective.toLocaleString()}`];
   if (carryover > 0) subPartsEff.push(`前月繰越 ¥${carryover.toLocaleString()}`);
   if (showMJ) subPartsEff.push(`本業 ¥${mainJobAmount.toLocaleString()}`);
   if (showEx) subPartsEff.push(`他 ¥${extraTotal.toLocaleString()}`);
 
   document.getElementById('summaryGrid').innerHTML = `
     <div class="summary-card total">
-      <div class="summary-label">全収入合計</div>
+      <div class="summary-label">目標に充てる収入</div>
       <div class="summary-value" style="color:var(--accent)">¥${grandTotalEffective.toLocaleString()}</div>
       <div class="summary-sub">${subPartsEff.join(' / ')}</div>
-      ${grandTotalEffective !== grandTotal ? `<div class="summary-sub" style="color:var(--text-dim);">今月稼いだ額 ¥${grandTotal.toLocaleString()}</div>` : ''}
+      ${grandTotalEffective !== grandTotal ? `<div class="summary-sub" style="color:var(--text-dim);">今月の実収入（暦月） ¥${grandTotal.toLocaleString()}</div>` : ''}
     </div>
     <div class="summary-card delivery">
-      <div class="summary-label">配達収入</div>
+      <div class="summary-label">配達の稼ぎ（今月分）</div>
       <div class="summary-value" style="color:var(--uber)">¥${deliveryTotal.toLocaleString()}</div>
       <div class="summary-sub">${daysWorked}日稼働 / 日平均 ¥${avgPerDay.toLocaleString()}${totalMinutes > 0 ? ` / ${formatHoursMinutes(totalMinutes)} / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>
       ${gasTotal > 0 ? `<div class="summary-sub" style="color:var(--text-dim);">⛽ −¥${gasTotal.toLocaleString()} → 実質 ¥${netDelivery.toLocaleString()}</div>` : ''}
@@ -3588,7 +3588,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v26';
+      const CACHE_NAME = 'delivery-dashboard-personal-v27';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
