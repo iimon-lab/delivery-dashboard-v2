@@ -202,7 +202,7 @@ input[type="number"]:focus, input[type="text"]:focus {
 .day-card-field input[type="number"], .day-card-field input.daily-input { font-size: 17px; padding: 10px 12px; max-width: 180px; }
 input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace; -moz-appearance: textfield; }
 .co-cell { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
-.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-family: 'JetBrains Mono', monospace; color: var(--text-dim); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; max-width: 130px; -moz-appearance: textfield; }
+input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-family: 'JetBrains Mono', monospace; color: var(--text-dim); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; max-width: 130px; -moz-appearance: textfield; }
 .count-input::placeholder { font-size: 11px; }
 .day-card-field .count-input { max-width: 76px; flex: 0 0 auto; }
 
@@ -1221,7 +1221,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-26 v24';
+const APP_BUILD = '2026-07-26 v25';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2591,14 +2591,13 @@ function recalcAll() {
   const remainingLabel = achieved ? '達成！' : `¥${remaining.toLocaleString()}`;
   const remainingColor = achieved ? 'var(--success)' : 'var(--danger)';
   const remainingSub = `目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}`;
-  // #35 余剰金（繰り上げ返済の原資）：収入(繰越込＝進捗バーと同じ合計) − ガソリン − 目標。常時表示
+  // 余剰金 / 不足額：収入(繰越込＝進捗バーと同じ合計) − ガソリン − 目標。黒字=余剰金／赤字=不足額を額のみ表示
   const surplus = (target > 0) ? (grandTotalEffective - gasTotal - target) : 0;
   const hasSurplus = surplus > 0;
-  const surplusLabel = hasSurplus ? `¥${surplus.toLocaleString()}` : '¥0';
-  const surplusColor = hasSurplus ? 'var(--success)' : 'var(--text-dim)';
-  const surplusSub = hasSurplus
-    ? `繰り上げ返済の原資 / 収入(繰越込) ¥${grandTotalEffective.toLocaleString()}${gasTotal > 0 ? ` − ⛽¥${gasTotal.toLocaleString()}` : ''} − 目標 ¥${target.toLocaleString()}`
-    : (target > 0 ? `黒字なし（必要額まであと ¥${Math.max(0, target - (grandTotalEffective - gasTotal)).toLocaleString()}）` : '⚙で目標を設定');
+  const surplusCardLabel = hasSurplus ? '余剰金' : (target > 0 ? '不足額' : '余剰金');
+  const surplusValue = hasSurplus ? `¥${surplus.toLocaleString()}` : (target > 0 ? `¥${Math.abs(surplus).toLocaleString()}` : '¥0');
+  const surplusColor = hasSurplus ? 'var(--success)' : (target > 0 ? 'var(--danger)' : 'var(--text-dim)');
+  const surplusBorder = hasSurplus ? 'var(--success)' : (target > 0 ? 'var(--danger)' : 'var(--border)');
 
   // Summary
   const showMJ = isMainJobVisible();
@@ -2646,10 +2645,9 @@ function recalcAll() {
       <div class="summary-value" style="color:${remainingColor}">${remainingLabel}</div>
       <div class="summary-sub">${remainingSub}</div>
     </div>
-    <div class="summary-card" style="border-left:3px solid var(--success);">
-      <div class="summary-label">余剰金（繰り上げ返済へ）</div>
-      <div class="summary-value" style="color:${surplusColor}">${surplusLabel}</div>
-      <div class="summary-sub">${surplusSub}</div>
+    <div class="summary-card" style="border-left:3px solid ${surplusBorder};">
+      <div class="summary-label">${surplusCardLabel}</div>
+      <div class="summary-value" style="color:${surplusColor}">${surplusValue}</div>
     </div>
     <div class="summary-card daily">
       <div class="summary-label">日別目標</div>
@@ -3117,32 +3115,40 @@ function openDailyResult(dd) {
   const dow = new Date(y, m - 1, d).getDay();
   const dateStr = `${m}月${d}日（${DOW_JP[dow]}）`;
 
-  // 業者別売上（0以外のみ）
-  let total = 0;
+  // 業者別売上（0以外のみ）＋件数・1件単価
+  const cnts = (md.counts || {})[dd] || {};
+  let total = 0, totalCnt = 0;
   const items = [];
   COMPANIES.forEach(co => {
     const amt = dayData[co.id] || 0;
     if (amt > 0) {
-      items.push({ name: co.name, color: co.color, amount: amt });
+      const cnt = cnts[co.id] || 0;
+      items.push({ name: co.name, color: co.color, amount: amt, count: cnt, unit: cnt > 0 ? Math.round(amt / cnt) : 0 });
       total += amt;
+      totalCnt += cnt;
     }
   });
 
   // 全業者0なら開かない
   if (total === 0) return;
 
-  // 前回の時給表示を削除
+  // 前回の時給・件単価表示を削除
   const prevHourly = document.getElementById('drHourly');
   if (prevHourly) prevHourly.remove();
+  const prevUnit = document.getElementById('drUnit');
+  if (prevUnit) prevUnit.remove();
 
   document.getElementById('drDate').textContent = dateStr;
   document.getElementById('drItems').innerHTML = items.map(it => `
     <div class="dr-item">
       <div class="dr-item-name">
         <div class="dr-item-dot" style="background:${it.color}"></div>
-        ${it.name}
+        ${it.name}${it.count > 0 ? ` <span style="font-size:11px;color:var(--text-dim);font-weight:400;">(${it.count}件)</span>` : ''}
       </div>
-      <div class="dr-item-amount" style="color:${it.color}">¥${it.amount.toLocaleString()}</div>
+      <div style="text-align:right;">
+        <div class="dr-item-amount" style="color:${it.color}">¥${it.amount.toLocaleString()}</div>
+        ${it.count > 0 ? `<div style="font-size:11px;color:var(--text-dim);">@¥${it.unit.toLocaleString()}/件</div>` : ''}
+      </div>
     </div>
   `).join('');
   document.getElementById('drTotal').textContent = `¥${total.toLocaleString()}`;
@@ -3160,6 +3166,18 @@ function openDailyResult(dd) {
       </div>`;
   }
   document.querySelector('.dr-total').insertAdjacentHTML('afterend', hoursHtml);
+
+  // 総件数・全体1件単価
+  let unitHtml = '';
+  if (totalCnt > 0) {
+    const overallUnit = Math.round(total / totalCnt);
+    unitHtml = `
+      <div id="drUnit" style="display:flex;justify-content:space-between;margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:13px;">
+        <span style="color:var(--text-dim);">🧮 総${totalCnt}件</span>
+        <span style="color:var(--text);font-weight:700;">全体 @¥${overallUnit.toLocaleString()}/件</span>
+      </div>`;
+  }
+  document.querySelector('.dr-total').insertAdjacentHTML('afterend', unitHtml);
 
   document.getElementById('drOverlay').classList.add('open');
 }
@@ -3558,7 +3576,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v24';
+      const CACHE_NAME = 'delivery-dashboard-personal-v25';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
