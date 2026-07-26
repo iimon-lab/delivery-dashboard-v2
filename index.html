@@ -204,7 +204,7 @@ input.daily-input { text-align: right; font-family: 'JetBrains Mono', monospace;
 .co-cell { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
 input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-family: 'JetBrains Mono', monospace; color: var(--text-dim); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; max-width: 130px; -moz-appearance: textfield; }
 .count-input::placeholder { font-size: 11px; }
-.day-card-field .count-input { max-width: 76px; flex: 0 0 auto; }
+.day-card-field .count-input { max-width: 76px; flex: 0 0 auto; text-align: right; }
 
 /* Side Income Section */
 .side-grid {
@@ -1221,7 +1221,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-26 v25';
+const APP_BUILD = '2026-07-26 v26';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3442,8 +3442,8 @@ function calcPeriodSummary() {
 
   // 全月のデータを横断して集計
   const companyTotals = {};
-  COMPANIES.forEach(co => companyTotals[co.id] = { name: co.name, color: co.color, amount: 0 });
-  let deliveryTotal = 0, daysWorked = 0, totalMinutesPeriod = 0, gasTotal = 0;
+  COMPANIES.forEach(co => companyTotals[co.id] = { name: co.name, color: co.color, amount: 0, count: 0 });
+  let deliveryTotal = 0, daysWorked = 0, totalMinutesPeriod = 0, gasTotal = 0, totalCountPeriod = 0;
   // 日平均：休日売上はボーナス扱いで分母から除外
   let daysWorkedPlanned = 0, deliveryPlanned = 0;
 
@@ -3455,11 +3455,15 @@ function calcPeriodSummary() {
     const monthData = data[ym];
     if (monthData) {
       const dayData = (monthData.daily || {})[dd] || {};
+      const dayCnts = (monthData.counts || {})[dd] || {};
       let dayTotal = 0;
       COMPANIES.forEach(co => {
         const amt = dayData[co.id] || 0;
         if (companyTotals[co.id]) companyTotals[co.id].amount += amt;
         dayTotal += amt;
+        const c = dayCnts[co.id] || 0;
+        if (companyTotals[co.id]) companyTotals[co.id].count += c;
+        totalCountPeriod += c;
       });
       deliveryTotal += dayTotal;
       if (dayTotal > 0) {
@@ -3487,9 +3491,10 @@ function calcPeriodSummary() {
   COMPANIES.forEach(co => {
     const t = companyTotals[co.id];
     if (t && t.amount > 0) {
+      const u = t.count > 0 ? Math.round(t.amount / t.count) : 0;
       html += `<div class="period-result-row">
-        <div class="label"><span class="payout-dot" style="background:${t.color}"></span>${t.name}</div>
-        <div class="value" style="color:${t.color}">¥${t.amount.toLocaleString()}</div>
+        <div class="label"><span class="payout-dot" style="background:${t.color}"></span>${t.name}${t.count > 0 ? ` <span style="font-size:11px;color:var(--text-dim);">(${t.count}件)</span>` : ''}</div>
+        <div class="value" style="color:${t.color};text-align:right;">¥${t.amount.toLocaleString()}${t.count > 0 ? `<div style="font-size:11px;color:var(--text-dim);font-weight:400;">@¥${u.toLocaleString()}/件</div>` : ''}</div>
       </div>`;
     }
   });
@@ -3499,6 +3504,13 @@ function calcPeriodSummary() {
     <div class="label">配達収入合計</div>
     <div class="value">¥${deliveryTotal.toLocaleString()}</div>
   </div>`;
+  if (totalCountPeriod > 0) {
+    const overallU = Math.round(deliveryTotal / totalCountPeriod);
+    html += `<div class="period-result-row" style="margin-top:8px;">
+      <div class="label">🧮 総件数</div>
+      <div class="value" style="font-size:16px;">${totalCountPeriod.toLocaleString()}件 <span style="color:var(--text-dim);font-size:13px;font-weight:400;">全体 @¥${overallU.toLocaleString()}/件</span></div>
+    </div>`;
+  }
 
   if (gasTotal > 0) {
     html += `<div class="period-result-row" style="margin-top:8px;">
@@ -3576,7 +3588,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v25';
+      const CACHE_NAME = 'delivery-dashboard-personal-v26';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
