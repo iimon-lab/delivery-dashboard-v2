@@ -1221,7 +1221,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-07-26 v27';
+const APP_BUILD = '2026-08-01 v28';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2436,6 +2436,32 @@ function getCarryoverFromPrevMonth(curMonth) {
   return carryover;
 }
 
+// ============ サイクル全稼働日（固定レート用） ============
+// 目標日を締切とした1サイクル＝前月の目標日翌日〜当月の目標日。その稼働日数（暦日−休日）を返す。
+function getCycleWorkDays(curMonth, goalDay, curDays, curHolidays) {
+  // 当月分：1〜目標日（目標日未設定なら月末）から休日を除く
+  const endDay = goalDay > 0 ? Math.min(goalDay, curDays) : curDays;
+  const curHol = (curHolidays || []).filter(h => h >= 1 && h <= endDay).length;
+  let workDays = Math.max(0, endDay - curHol);
+  // 前月分：前月の目標日翌日〜前月末（目標日が設定されている場合のみ）
+  if (goalDay > 0) {
+    const parts = curMonth.split('-').map(Number);
+    const cy = parts[0], cm = parts[1];
+    const prevM = cm === 1 ? 12 : cm - 1;
+    const prevY = cm === 1 ? cy - 1 : cy;
+    const prevKey = prevY + '-' + String(prevM).padStart(2, '0');
+    const prevData = data[prevKey] || {};
+    const prevGoalDay = prevData.payoutGoalDay || goalDay; // 前月未設定なら当月と同じ目標日で近似
+    const prevDays = new Date(prevY, prevM, 0).getDate();
+    const prevStart = prevGoalDay + 1;
+    if (prevStart <= prevDays) {
+      const prevHol = (prevData.holidays || []).filter(h => h >= prevStart && h <= prevDays).length;
+      workDays += Math.max(0, (prevDays - prevStart + 1) - prevHol);
+    }
+  }
+  return workDays;
+}
+
 // ============ CALC ============
 function recalcAll() {
   const rawTarget = document.getElementById('monthlyTarget').value;
@@ -2565,6 +2591,9 @@ function recalcAll() {
   let remainingWorkDays = Math.max(0, remainingDaysRaw - futureHolidays);
 
   const dailyNeeded = remainingWorkDays > 0 ? Math.ceil(remaining / remainingWorkDays) : 0;
+  // 標準ペース（固定レート）：目標額 ÷ サイクル全稼働日（前月目標日翌日〜当月目標日）
+  const cycleWorkDays = getCycleWorkDays(currentMonth, goalDay, days, holidays);
+  const fixedDaily = cycleWorkDays > 0 ? Math.ceil(target / cycleWorkDays) : 0;
   // 日平均：休日売上はボーナス扱いで分母から除外（ペース判定の歪み防止）
   const avgPerDay = daysWorkedPlanned > 0 ? Math.round(deliveryPlanned / daysWorkedPlanned) : 0;
   const pct = target > 0 ? Math.min(999, Math.round(grandTotalEffective / target * 100)) : 0;
@@ -2652,7 +2681,8 @@ function recalcAll() {
     <div class="summary-card daily">
       <div class="summary-label">日別目標</div>
       <div class="summary-value" style="color:var(--warning)">¥${dailyNeeded.toLocaleString()}</div>
-      <div class="summary-sub">${hasGoalDay ? `目標日まで残り${remainingWorkDays}稼働日` : `残り${remainingWorkDays}稼働日（月末基準）`}</div>
+      <div class="summary-sub">今日から必要（残り${remainingWorkDays}稼働日${hasGoalDay ? '' : '・月末基準'}）</div>
+      <div class="summary-sub" style="color:var(--text-dim)">標準ペース ¥${fixedDaily.toLocaleString()}${hasGoalDay ? `（サイクル${cycleWorkDays}稼働日）` : `（月${cycleWorkDays}稼働日）`}</div>
     </div>
   `;
 
@@ -3588,7 +3618,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v27';
+      const CACHE_NAME = 'delivery-dashboard-personal-v28';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
