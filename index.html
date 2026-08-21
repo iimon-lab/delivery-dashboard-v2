@@ -1231,7 +1231,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-21 v30';
+const APP_BUILD = '2026-08-21 v30.1';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1945,9 +1945,37 @@ function isDayPartialPayout(workDay, y, m, goalDate) {
   return ok > 0 && ng > 0;
 }
 // 引き落とし日から目標日（＝最終入金日）を自動反映し、画面表示も更新する
+// v30.1: 引き落とし日の記憶（毎月入れ直さなくてよいようにする）
+const DEFAULT_WITHDRAWAL_DAY = 27;
+function getRememberedWithdrawalDay() {
+  try {
+    const v = parseInt(localStorage.getItem('dd_withdrawal_day'));
+    if (v >= 1 && v <= 31) return v;
+  } catch (e) {}
+  return DEFAULT_WITHDRAWAL_DAY;
+}
+function rememberWithdrawalDay(v) {
+  try {
+    if (v >= 1 && v <= 31) localStorage.setItem('dd_withdrawal_day', String(v));
+  } catch (e) {}
+}
+// 自動継承してよい月かどうか（過去月・既に目標日がある月には触らない）
+function canInheritWithdrawalDay(md, y, m) {
+  if (md.withdrawalDay !== undefined && md.withdrawalDay !== null) return false; // 明示設定済み（0＝オフも尊重）
+  if (md.payoutGoalDay > 0) return false;                                        // 既存の判定基準を変えない
+  const now = new Date();
+  const curKey = now.getFullYear() * 100 + (now.getMonth() + 1);
+  return (y * 100 + m) >= curKey;                                                // 過去月には遡及しない
+}
+
 function applyWithdrawalGoalDay() {
   const md = getMonthData();
   const [y, m] = currentMonth.split('-').map(Number);
+  if (canInheritWithdrawalDay(md, y, m)) {
+    md.withdrawalDay = getRememberedWithdrawalDay();
+    const wdiAuto = document.getElementById('withdrawalDayInput');
+    if (wdiAuto) wdiAuto.value = md.withdrawalDay;
+  }
   if (md.withdrawalDay > 0) {
     const gd = getGoalDayFromWithdrawal(y, m, md.withdrawalDay);
     if (gd > 0) md.payoutGoalDay = gd;
@@ -1970,6 +1998,7 @@ function onWithdrawalDayChange(value) {
   if (v < 1) v = 0;
   if (v > 31) v = 31;
   md.withdrawalDay = v;
+  rememberWithdrawalDay(v);
   applyWithdrawalGoalDay();
   renderHolidayCalendar();
   recalcAll();
@@ -3782,7 +3811,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v30';
+      const CACHE_NAME = 'delivery-dashboard-personal-v30-1';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
