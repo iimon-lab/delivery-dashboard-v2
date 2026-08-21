@@ -1221,7 +1221,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-01 v28';
+const APP_BUILD = '2026-08-21 v29';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2270,6 +2270,9 @@ function focusNavTarget(node) { if (node && node.focus) node.focus(); }
 // キーボード経由で開いた場合は閉じたとき次の欄へ自動で進む。
 function onHoursKeydown(e) {
   const tap = e.currentTarget;
+  const drumOv = document.getElementById('drumOverlay');
+  // ドラム表示中のキー操作はドラム側（onDrumKeydown＝Enterで完了）に委ねる
+  if (drumOv && drumOv.classList.contains('open')) return;
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
     e.stopPropagation();
@@ -3271,7 +3274,7 @@ function initDrumPicker() {
   // Scroll listeners to highlight selected
   hCol.addEventListener('scroll', () => drumUpdateSelection(hCol));
   mCol.addEventListener('scroll', () => drumUpdateSelection(mCol));
-  document.addEventListener('keydown', onDrumKeydown);
+  document.addEventListener('keydown', onDrumKeydown, true);
 }
 
 function drumUpdateSelection(col) {
@@ -3393,6 +3396,7 @@ function drumStep(colId, dir) {
 function onDrumKeydown(e) {
   const overlay = document.getElementById('drumOverlay');
   if (!overlay || !overlay.classList.contains('open')) return;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape'].indexOf(e.key) >= 0) e.stopPropagation();
   switch (e.key) {
     case 'ArrowUp': e.preventDefault(); drumStep(drumActiveCol, -1); break;
     case 'ArrowDown': e.preventDefault(); drumStep(drumActiveCol, 1); break;
@@ -3618,7 +3622,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v28';
+      const CACHE_NAME = 'delivery-dashboard-personal-v29';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
