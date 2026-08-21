@@ -401,6 +401,7 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 .holiday-cell.holiday.sun-col, .holiday-cell.holiday.sat-col { color: #fff; }
 .holiday-cell.no-payout { opacity: 0.35; background: #333; color: var(--text-dim); }
 .holiday-cell.no-payout.holiday { opacity: 0.3; background: #553333; }
+.holiday-cell.part-payout { background: #4a4327; color: #e8dcae; }
 .holiday-legend { font-size: 11px; color: var(--text-dim); margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .holiday-legend-item { display: flex; align-items: center; gap: 5px; }
 .holiday-legend-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
@@ -817,6 +818,7 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 :root[data-theme="light"] input.daily-input.no-payout-input,
 :root[data-theme="light"] .holiday-cell.no-payout{ background:#e4e7eb !important; }
 :root[data-theme="light"] .holiday-cell.no-payout.holiday{ background:#f3d6d6 !important; }
+:root[data-theme="light"] .holiday-cell.part-payout{ background:#f5ecc9 !important; color:#7a6a2a !important; }
 :root[data-theme="light"] .source-manager{ background:#f0f2f5; }
 :root[data-theme="light"] .source-manager h3{ color:#5f6571; }
 :root[data-theme="light"] .source-item{ background:#ffffff; border:1px solid #d7dbe0; }
@@ -889,10 +891,18 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
     </div>
   </div>
   <div class="settings-row">
-    <label>目標日（毎月）</label>
+    <label>引き落とし日（毎月）</label>
+    <input type="number" id="withdrawalDayInput" min="1" max="31" step="1" placeholder="27" onchange="onWithdrawalDayChange(this.value)"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+    <span style="font-size:12px; color:var(--text-dim);">日</span>
+    <span id="withdrawalInfo" style="font-size:12px; color:var(--text-dim);"></span>
+  </div>
+  <div class="settings-row">
+    <label>目標日（最終入金日）</label>
     <input type="number" id="goalDayInput" min="1" max="31" step="1" placeholder="25" onchange="onGoalDayChange(this.value)"
       onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
     <span style="font-size:12px; color:var(--text-dim);">日</span>
+    <span style="font-size:12px; color:var(--text-dim);">※引き落とし日を入れると自動で入ります</span>
   </div>
 
   <div class="settings-row">
@@ -1221,7 +1231,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-21 v29';
+const APP_BUILD = '2026-08-21 v30';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1585,7 +1595,7 @@ function getPayoutDateForDay(workDay, y, m, co) {
     if (daysUntilPay <= 0) daysUntilPay += 7;
     const payDate = new Date(cutDate);
     payDate.setDate(payDate.getDate() + daysUntilPay);
-    return payDate;
+    return nextBizDay(payDate); // v30: 振込日が土日祝なら翌営業日
   }
 
   if (cfg.type === 'monthly') {
@@ -1598,30 +1608,30 @@ function getPayoutDateForDay(workDay, y, m, co) {
       if (workDay <= effectiveCut) {
         // 前半: 振込は翌月payDay or 締め後X営業日
         if (cfg.payDay) {
-          return new Date(y, m, cfg.payDay); // 翌月payDay日
+          return nextBizDay(new Date(y, m, cfg.payDay)); // 翌月payDay日
         } else if (cfg.payBusinessDays) {
           return addBusinessDays(new Date(y, m - 1, effectiveCut), cfg.payBusinessDays);
         } else {
-          return new Date(y, m, 0); // 月末
+          return nextBizDay(new Date(y, m, 0)); // 月末
         }
       } else {
         // 後半: 振込は翌々月payDay or 月末締め後X営業日
         if (cfg.payDay) {
-          return new Date(y, m + 1, cfg.payDay); // 翌々月payDay日
+          return nextBizDay(new Date(y, m + 1, cfg.payDay)); // 翌々月payDay日
         } else if (cfg.payBusinessDays) {
           return addBusinessDays(new Date(y, m - 1, daysInMonth), cfg.payBusinessDays);
         } else {
-          return new Date(y, m + 1, 0);
+          return nextBizDay(new Date(y, m + 1, 0));
         }
       }
     } else {
       // 月末締め → 翌月payDay or 翌月末 or 締め後X営業日
       if (cfg.payDay) {
-        return new Date(y, m, cfg.payDay);
+        return nextBizDay(new Date(y, m, cfg.payDay));
       } else if (cfg.payBusinessDays) {
         return addBusinessDays(new Date(y, m - 1, daysInMonth), cfg.payBusinessDays);
       } else {
-        return new Date(y, m + 1, 0);
+        return nextBizDay(new Date(y, m + 1, 0));
       }
     }
   }
@@ -1754,12 +1764,14 @@ function renderHolidayCalendar() {
     const isToday = isCurrentMonth && d === todayDate;
     const dow = new Date(y, m - 1, d).getDay();
     const greyed = isDayGreyedOut(d, y, m, goalDate);
+    const partial = !greyed && isDayPartialPayout(d, y, m, goalDate);
     const cls = ['holiday-cell'];
     if (isHoliday) cls.push('holiday');
     if (isToday) cls.push('today');
     if (dow === 0) cls.push('sun-col');
     if (dow === 6) cls.push('sat-col');
     if (greyed) cls.push('no-payout');
+    if (partial) cls.push('part-payout');
     html += `<div class="${cls.join(' ')}" onclick="toggleHoliday(${d})">${d}</div>`;
   }
 
@@ -1829,10 +1841,139 @@ function getPaymentDate(ym) {
   return d;
 }
 
+// ============ 日本の祝日（v30） ============
+// 出典：内閣府「国民の祝日について」／春分・秋分は国立天文台の暦要項
+// 2028年以降は暦要項が未確定のため未収録。未収録の年は土日のみ除外＝従来動作にフォールバックする
+const JP_HOLIDAYS = new Set([
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29',
+  '2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11',
+  '2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23',
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22',
+  '2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11',
+  '2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23'
+]);
+function ymdKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function isJpHoliday(d) { return JP_HOLIDAYS.has(ymdKey(d)); }
+function isBizDay(d) { return d.getDay() !== 0 && d.getDay() !== 6 && !isJpHoliday(d); }
+function nextBizDay(date) { let d = new Date(date); let g = 0; while (!isBizDay(d) && g++ < 40) d.setDate(d.getDate() + 1); return d; }
+function prevBizDay(date) { let d = new Date(date); let g = 0; while (!isBizDay(d) && g++ < 40) d.setDate(d.getDate() - 1); return d; }
+
 function addBusinessDays(date, days) {
   let d = new Date(date); let count = 0;
-  while (count < days) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
+  while (count < days) { d.setDate(d.getDate() + 1); if (isBizDay(d)) count++; }
   return d;
+}
+
+// ============ 引き落とし日 → 最終入金日 → 各社の稼働締め日（v30） ============
+// 引き落とし日が土日祝なら実行は翌営業日。その前営業日までに着金していれば間に合う
+function getWithdrawalInfo(y, m, wDay) {
+  if (!wDay || wDay <= 0) return null;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const exec = nextBizDay(new Date(y, m - 1, Math.min(wDay, daysInMonth)));
+  const prev = new Date(exec.getFullYear(), exec.getMonth(), exec.getDate() - 1);
+  return { execDate: exec, lastPayDate: prevBizDay(prev) };
+}
+function getGoalDayFromWithdrawal(y, m, wDay) {
+  const info = getWithdrawalInfo(y, m, wDay);
+  if (!info) return 0;
+  const lp = info.lastPayDate;
+  if (lp.getFullYear() === y && lp.getMonth() === m - 1) return lp.getDate();
+  return (lp < new Date(y, m - 1, 1)) ? 1 : new Date(y, m, 0).getDate();
+}
+// その業者で「この日までに稼げば目標日までに入金される」最後の稼働日
+function getCompanyCutoffDay(y, m, co, goalDate) {
+  if (!goalDate) return null;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const cfg = resolvePayoutConfig(co);
+  if (cfg.type === 'instant') return daysInMonth;
+  for (let d = daysInMonth; d >= 1; d--) {
+    const p = getPayoutDateForDay(d, y, m, co);
+    if (p === null || p <= goalDate) return d;
+  }
+  return 0;
+}
+// 直近2か月の実績から業者別の売上構成比（実績ゼロなら均等割り）
+function getCompanyShares() {
+  const tot = {}; let sum = 0;
+  const [cy, cm] = currentMonth.split('-').map(Number);
+  const py = cm === 1 ? cy - 1 : cy;
+  const pm = cm === 1 ? 12 : cm - 1;
+  const months = [currentMonth, `${py}-${String(pm).padStart(2,'0')}`];
+  for (const mk of months) {
+    const md2 = data[mk];
+    if (!md2 || !md2.daily) continue;
+    for (const dd in md2.daily) {
+      const rec = md2.daily[dd] || {};
+      COMPANIES.forEach(co => { const v = rec[co.id] || 0; if (v > 0) { tot[co.id] = (tot[co.id] || 0) + v; sum += v; } });
+    }
+  }
+  const shares = {};
+  if (sum <= 0) { COMPANIES.forEach(co => { shares[co.id] = COMPANIES.length ? 1 / COMPANIES.length : 0; }); return shares; }
+  COMPANIES.forEach(co => { shares[co.id] = (tot[co.id] || 0) / sum; });
+  return shares;
+}
+// 有効稼働日＝各日について「入金が目標日に間に合う業者の構成比」を足し上げた日数
+function getEffectiveRemainingDays(y, m, goalDate, fromDay, endDay, holidays) {
+  const shares = getCompanyShares();
+  let eff = 0;
+  for (let d = fromDay; d <= endDay; d++) {
+    if ((holidays || []).includes(d)) continue;
+    let w = 0;
+    COMPANIES.forEach(co => {
+      const s = shares[co.id] || 0;
+      if (s <= 0) return;
+      if (!goalDate) { w += s; return; }
+      const p = getPayoutDateForDay(d, y, m, co);
+      if (p === null || p <= goalDate) w += s;
+    });
+    eff += w;
+  }
+  return eff;
+}
+// 一部の業者だけ間に合う日（カレンダーの中間色用）
+function isDayPartialPayout(workDay, y, m, goalDate) {
+  if (!goalDate || COMPANIES.length === 0) return false;
+  let ok = 0, ng = 0;
+  for (const co of COMPANIES) {
+    const cfg = resolvePayoutConfig(co);
+    if (cfg.type === 'instant') { ok++; continue; }
+    const p = getPayoutDateForDay(workDay, y, m, co);
+    if (p === null || p <= goalDate) ok++; else ng++;
+  }
+  return ok > 0 && ng > 0;
+}
+// 引き落とし日から目標日（＝最終入金日）を自動反映し、画面表示も更新する
+function applyWithdrawalGoalDay() {
+  const md = getMonthData();
+  const [y, m] = currentMonth.split('-').map(Number);
+  if (md.withdrawalDay > 0) {
+    const gd = getGoalDayFromWithdrawal(y, m, md.withdrawalDay);
+    if (gd > 0) md.payoutGoalDay = gd;
+  }
+  const gdi = document.getElementById('goalDayInput');
+  if (gdi) {
+    gdi.value = md.payoutGoalDay || '';
+    gdi.readOnly = md.withdrawalDay > 0;
+    gdi.style.opacity = md.withdrawalDay > 0 ? '0.6' : '';
+  }
+  const wi = document.getElementById('withdrawalInfo');
+  if (wi) {
+    const info = getWithdrawalInfo(y, m, md.withdrawalDay || 0);
+    wi.textContent = info ? `引き落とし ${formatDate(info.execDate)} ／ 最終入金日 ${formatDate(info.lastPayDate)}` : '';
+  }
+}
+function onWithdrawalDayChange(value) {
+  const md = getMonthData();
+  let v = parseInt(value) || 0;
+  if (v < 1) v = 0;
+  if (v > 31) v = 31;
+  md.withdrawalDay = v;
+  applyWithdrawalGoalDay();
+  renderHolidayCalendar();
+  recalcAll();
+  saveData();
 }
 
 function formatDate(d) { return `${d.getMonth()+1}/${d.getDate()}(${DOW_JP[d.getDay()]})`; }
@@ -1840,8 +1981,11 @@ function formatDate(d) { return `${d.getMonth()+1}/${d.getDate()}(${DOW_JP[d.get
 // ============ RENDER ============
 function render() {
   const md = getMonthData();
+  const wdi = document.getElementById('withdrawalDayInput');
+  if (wdi) wdi.value = md.withdrawalDay || '';
   const gdi = document.getElementById('goalDayInput');
   if (gdi) gdi.value = md.payoutGoalDay || '';
+  applyWithdrawalGoalDay();
   // 月別の支出項目を読み込み→目標金額に反映
   renderExpenseItems();
   renderDeliveryRows();
@@ -2593,7 +2737,11 @@ function recalcAll() {
   }
   let remainingWorkDays = Math.max(0, remainingDaysRaw - futureHolidays);
 
-  const dailyNeeded = remainingWorkDays > 0 ? Math.ceil(remaining / remainingWorkDays) : 0;
+  // v30: 分母を「有効稼働日」に変更（入金が目標日に間に合う業者の構成比だけを数える）
+  const fromDayEff = isCurrentMonth ? todayDate + 1 : 1;
+  const effRemainingDays = getEffectiveRemainingDays(curY, curM, goalDateCalc, fromDayEff, endDay, holidays);
+  const effDenom = effRemainingDays > 0.05 ? effRemainingDays : 0;
+  const dailyNeeded = effDenom > 0 ? Math.ceil(remaining / effDenom) : 0;
   // 標準ペース（固定レート）：目標額 ÷ サイクル全稼働日（前月目標日翌日〜当月目標日）
   const cycleWorkDays = getCycleWorkDays(currentMonth, goalDay, days, holidays);
   const fixedDaily = cycleWorkDays > 0 ? Math.ceil(target / cycleWorkDays) : 0;
@@ -2643,6 +2791,17 @@ function recalcAll() {
   if (showMJ) subPartsEff.push(`本業 ¥${mainJobAmount.toLocaleString()}`);
   if (showEx) subPartsEff.push(`他 ¥${extraTotal.toLocaleString()}`);
 
+  // v30: 各社の稼働締め日（この日までに稼げば目標日までに入金される）
+  let cutoffLabel = '';
+  if (goalDateCalc) {
+    cutoffLabel = COMPANIES.map(co => {
+      const cfg = resolvePayoutConfig(co);
+      if (cfg.type === 'instant') return `${co.name} 随時`;
+      const cd = getCompanyCutoffDay(curY, curM, co, goalDateCalc);
+      return cd > 0 ? `${co.name} ${curM}/${cd}` : `${co.name} 今月なし`;
+    }).join(' ・ ');
+  }
+
   document.getElementById('summaryGrid').innerHTML = `
     <div class="summary-card total">
       <div class="summary-label">目標に充てる収入</div>
@@ -2684,7 +2843,8 @@ function recalcAll() {
     <div class="summary-card daily">
       <div class="summary-label">日別目標</div>
       <div class="summary-value" style="color:var(--warning)">¥${dailyNeeded.toLocaleString()}</div>
-      <div class="summary-sub">今日から必要（残り${remainingWorkDays}稼働日${hasGoalDay ? '' : '・月末基準'}）</div>
+      <div class="summary-sub">今日から必要（有効稼働日 ${effDenom.toFixed(1)}日${hasGoalDay ? '' : '・月末基準'}／暦 ${remainingWorkDays}日）</div>
+      ${cutoffLabel ? `<div class="summary-sub" style="color:var(--text-dim)">⏱ 稼働締切 ${cutoffLabel}</div>` : ''}
       <div class="summary-sub" style="color:var(--text-dim)">標準ペース ¥${fixedDaily.toLocaleString()}${hasGoalDay ? `（サイクル${cycleWorkDays}稼働日）` : `（月${cycleWorkDays}稼働日）`}</div>
     </div>
   `;
@@ -3622,7 +3782,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v29';
+      const CACHE_NAME = 'delivery-dashboard-personal-v30';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
