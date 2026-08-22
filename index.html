@@ -78,6 +78,16 @@ body { overflow-x: hidden; }
   filter: brightness(1.5);
   cursor: pointer;
 }
+/* v32: 月ナビ（◀ 月 ▶） */
+.month-nav { display: flex; align-items: center; gap: 4px; }
+.month-nav-btn {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; cursor: pointer; font-size: 14px; line-height: 1; padding: 0;
+  width: 32px; height: 37px; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: border-color .15s, color .15s;
+}
+.month-nav-btn:hover { border-color: var(--rocket); color: var(--rocket); }
+.month-nav-btn:active { transform: scale(0.94); }
 
 .btn {
   padding: 8px 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
@@ -729,7 +739,9 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
   .month-selector { padding: 6px 10px; font-size: 13px; }
   .header-controls .btn { padding: 10px 14px; font-size: 14px; min-height: 44px; flex-shrink: 0; }
   .header-controls .btn-icon { padding: 0; width: 44px; min-height: 44px; font-size: 20px; flex-shrink: 0; }
-  .header-controls .month-selector { padding: 8px 10px; font-size: 14px; min-height: 44px; flex-shrink: 1; min-width: 120px; }
+  .header-controls .month-selector { padding: 8px 6px; font-size: 14px; min-height: 44px; flex-shrink: 1; min-width: 92px; }
+  .header-controls .month-nav { gap: 3px; flex-shrink: 1; }
+  .header-controls .month-nav-btn { width: 30px; height: 44px; min-height: 44px; font-size: 15px; }
 
   /* Scroll-to-top Button: スマホ */
   .scroll-top-btn {
@@ -848,7 +860,11 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 <div class="header">
   <h1>💰 収入管理ダッシュボード</h1>
   <div class="header-controls">
-    <input type="month" id="monthSelector" class="month-selector">
+    <div class="month-nav">
+      <button class="month-nav-btn" onclick="changeMonthBySwipe(-1)" title="前の月へ" aria-label="前の月へ">◀</button>
+      <input type="month" id="monthSelector" class="month-selector" onclick="openMonthPicker(event)" title="タップで月を選ぶ">
+      <button class="month-nav-btn" onclick="changeMonthBySwipe(1)" title="次の月へ" aria-label="次の月へ">▶</button>
+    </div>
     <button class="btn" onclick="toggleHolidaySection()">📅 休日</button>
     <button class="btn btn-icon" onclick="toggleSettings()" style="border-color:var(--rocket);color:var(--rocket);">⚙</button>
     <button class="btn btn-icon" onclick="openPeriodSummary()" style="border-color:var(--warning);color:var(--warning);" title="期間集計">📊</button>
@@ -1240,7 +1256,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-22 v31';
+const APP_BUILD = '2026-08-22 v32.1';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1429,6 +1445,18 @@ function changeMonthBySwipe(delta) {
       el.style.opacity = '';
     }, 300);
   }, 200);
+}
+
+// v32: 月の入力欄をタップしたら、カレンダーの小さいアイコンを狙わなくてもピッカーが開くようにする
+function openMonthPicker(e) {
+  const el = document.getElementById('monthSelector');
+  if (!el) return;
+  try {
+    if (typeof el.showPicker === 'function') {
+      el.showPicker();
+      if (e && e.preventDefault) e.preventDefault();
+    }
+  } catch (err) { /* 未対応ブラウザは従来どおりの挙動 */ }
 }
 
 // ============ STORAGE ============
@@ -2647,18 +2675,47 @@ function getCycleWorkDays(curMonth, goalDay, curDays, curHolidays) {
   return workDays;
 }
 
-// ============ サイクル進捗（v31） ============
-// 1サイクル＝前月の目標日翌日〜当月の目標日。開始日・全稼働日・経過稼働日を返す。
-// 経過稼働日は「今日を含む」＝今日を終えた時点で到達しているべき水準を出すため。
-function getCycleInfo(curMonth, goalDay, curDays, curHolidays) {
+// ============ サイクル進捗（v32：稼働日ベース） ============
+// v31は「入金日」でサイクルの境界を引いていたため、前月16日以降の出前館の稼働
+// （＝当月入金＝当サイクルの原資）が「まだサイクルが始まっていない」扱いになり、
+// 経過日数だけ0なのに実績（前月繰越）だけ載る、という齟齬が出ていた。
+// v32では「その日の稼働が当サイクルの入金になるか」で日を数える。
+// 日ごとの重みは有効稼働日と同じ売上構成比なので、9/16以降のように出前館が抜ける日は自動的に軽くなる。
+//   afterDate … これより後の入金だけを当サイクルとみなす（前月セグメント用。当月セグメントは null）
+//   untilNum  … YYYYMMDD。この日までを「経過」として数える（null なら全期間）
+function getCycleSegEff(y, m, fromDay, endDay, holidays, goalDate, afterDate, untilNum) {
+  const shares = getCompanyShares();
+  const hol = holidays || [];
+  let eff = 0, firstDay = 0;
+  for (let d = fromDay; d <= endDay; d++) {
+    if (untilNum !== null && (y * 10000 + m * 100 + d) > untilNum) break;
+    if (hol.indexOf(d) >= 0) continue;
+    let w = 0;
+    COMPANIES.forEach(co => {
+      const s = shares[co.id] || 0;
+      if (s <= 0) return;
+      const p = getPayoutDateForDay(d, y, m, co);
+      if (afterDate) {
+        // 前月分：前サイクルの締めより後、かつ当サイクルの目標日までに入る入金だけ
+        if (p !== null && p > afterDate && (!goalDate || p <= goalDate)) w += s;
+      } else {
+        if (p === null || !goalDate || p <= goalDate) w += s;
+      }
+    });
+    if (w > 0 && firstDay === 0) firstDay = d;
+    eff += w;
+  }
+  return { eff: eff, firstDay: firstDay };
+}
+
+function getCycleInfo(curMonth, goalDay, curDays, curHolidays, goalDate) {
   const parts = curMonth.split('-').map(Number);
   const cy = parts[0], cm = parts[1];
   const endDay = goalDay > 0 ? Math.min(goalDay, curDays) : curDays;
   const now = new Date();
   const todayNum = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-  const done = (y, m, d) => (y * 10000 + m * 100 + d) <= todayNum;
 
-  let startY = cy, startM = cm, startD = 1;
+  let startM = cm, startD = 1;
   let prevTotal = 0, prevElapsed = 0, hasPrevSeg = false;
   if (goalDay > 0) {
     const prevM = cm === 1 ? 12 : cm - 1;
@@ -2667,27 +2724,20 @@ function getCycleInfo(curMonth, goalDay, curDays, curHolidays) {
     const prevData = data[prevKey] || {};
     const prevGoalDay = prevData.payoutGoalDay || goalDay; // 前月未設定なら当月と同じ目標日で近似
     const prevDays = new Date(prevY, prevM, 0).getDate();
-    const ps = prevGoalDay + 1;
-    if (ps <= prevDays) {
-      const prevHol = prevData.holidays || [];
-      for (let d = ps; d <= prevDays; d++) {
-        if (prevHol.indexOf(d) >= 0) continue;
-        prevTotal++;
-        if (done(prevY, prevM, d)) prevElapsed++;
-      }
-      startY = prevY; startM = prevM; startD = ps; hasPrevSeg = true;
+    const prevGoalDate = getGoalDateForMonth(prevY, prevM, prevGoalDay);
+    const prevHol = prevData.holidays || [];
+    const full = getCycleSegEff(prevY, prevM, 1, prevDays, prevHol, goalDate, prevGoalDate, null);
+    if (full.eff > 0.001 && full.firstDay > 0) {
+      startM = prevM; startD = full.firstDay; hasPrevSeg = true;
+      prevTotal = full.eff;
+      prevElapsed = getCycleSegEff(prevY, prevM, 1, prevDays, prevHol, goalDate, prevGoalDate, todayNum).eff;
     }
   }
 
-  const curHol = curHolidays || [];
-  let curTotal = 0, curElapsed = 0;
-  for (let d = 1; d <= endDay; d++) {
-    if (curHol.indexOf(d) >= 0) continue;
-    curTotal++;
-    if (done(cy, cm, d)) curElapsed++;
-  }
+  const cur = getCycleSegEff(cy, cm, 1, endDay, curHolidays || [], goalDate, null, null);
+  const curElapsed = getCycleSegEff(cy, cm, 1, endDay, curHolidays || [], goalDate, null, todayNum).eff;
 
-  const total = prevTotal + curTotal;
+  const total = prevTotal + cur.eff;
   const elapsed = Math.min(total, prevElapsed + curElapsed);
   return {
     label: startM + '/' + startD + '〜' + cm + '/' + endDay,
@@ -2830,8 +2880,10 @@ function recalcAll() {
   const effRemainingDays = getEffectiveRemainingDays(curY, curM, goalDateCalc, fromDayEff, endDay, holidays);
   const effDenom = effRemainingDays > 0.05 ? effRemainingDays : 0;
   const dailyNeeded = effDenom > 0 ? Math.ceil(remaining / effDenom) : 0;
-  // 標準ペース（固定レート）：目標額 ÷ サイクル全稼働日（前月目標日翌日〜当月目標日）
-  const cycleWorkDays = getCycleWorkDays(currentMonth, goalDay, days, holidays);
+  // 標準ペース（固定レート）：目標額 ÷ サイクル全稼働日
+  // v32c: 分母を進捗バーと同じ「稼働日ベースの有効稼働日」に統一（画面上の数字の食い違いを解消）
+  const cyc = getCycleInfo(currentMonth, goalDay, days, holidays, goalDateCalc);
+  const cycleWorkDays = cyc.totalWorkDays;
   const fixedDaily = cycleWorkDays > 0 ? Math.ceil(target / cycleWorkDays) : 0;
   // 日平均：休日売上はボーナス扱いで分母から除外（ペース判定の歪み防止）
   const avgPerDay = daysWorkedPlanned > 0 ? Math.round(deliveryPlanned / daysWorkedPlanned) : 0;
@@ -2933,7 +2985,7 @@ function recalcAll() {
       <div class="summary-value" style="color:var(--warning)">¥${dailyNeeded.toLocaleString()}</div>
       <div class="summary-sub">今日から必要（有効稼働日 ${effDenom.toFixed(1)}日${hasGoalDay ? '' : '・月末基準'}／暦 ${remainingWorkDays}日）</div>
       ${cutoffLabel ? `<div class="summary-sub" style="color:var(--text-dim)">⏱ 稼働締切 ${cutoffLabel}</div>` : ''}
-      <div class="summary-sub" style="color:var(--text-dim)">標準ペース ¥${fixedDaily.toLocaleString()}${hasGoalDay ? `（サイクル${cycleWorkDays}稼働日）` : `（月${cycleWorkDays}稼働日）`}</div>
+      <div class="summary-sub" style="color:var(--text-dim)">標準ペース ¥${fixedDaily.toLocaleString()}${hasGoalDay ? `（サイクル${cycleWorkDays.toFixed(1)}稼働日）` : `（月${cycleWorkDays.toFixed(1)}稼働日）`}</div>
     </div>
   `;
 
@@ -2979,8 +3031,7 @@ function recalcAll() {
   }
   document.getElementById('progressTarget').textContent = `¥${target.toLocaleString()}`;
 
-  // v31: サイクル進捗（見出し・ペースマーカー・注記）
-  const cyc = getCycleInfo(currentMonth, goalDay, days, holidays);
+  // v31: サイクル進捗（見出し・ペースマーカー・注記）※cyc は上部で計算済み
   const titleEl = document.getElementById('progressTitle');
   if (titleEl) {
     titleEl.textContent = hasGoalDay
@@ -2992,8 +3043,8 @@ function recalcAll() {
   const cycOk = hasGoalDay && cyc.totalWorkDays > 0 && target > 0;
   const pacePct = cycOk ? Math.min(100, cyc.elapsedWorkDays / cyc.totalWorkDays * 100) : 0;
   if (markerEl) {
-    markerEl.style.display = (cycOk && pacePct > 0 && pacePct < 100) ? 'block' : 'none';
-    markerEl.style.left = pacePct + '%';
+    markerEl.style.display = (cycOk && pacePct > 0) ? 'block' : 'none';
+    markerEl.style.left = Math.min(99.6, pacePct) + '%';
   }
   if (noteEl) {
     if (!cycOk) {
@@ -3004,11 +3055,12 @@ function recalcAll() {
       const ahead = diff >= 0;
       const diffColor = ahead ? 'var(--success)' : 'var(--danger)';
       const diffText = `${ahead ? '+' : '−'}¥${Math.abs(diff).toLocaleString()} ${ahead ? '先行' : '遅れ'}`;
+      const goalLabel = payDate ? formatDate(payDate) : `${curM}/${endDay}`;
       const cycleWhy = cyc.hasPrevSeg
-        ? '前月の目標日翌日〜当月の目標日＝この引き落としに間に合う入金の範囲'
-        : '当月の目標日まで';
+        ? `この期間に稼いだ分が ${goalLabel} までに入金される（業者ごとに締めが違うため、日数は売上構成比で重み付け）`
+        : `当月の目標日までに入金される稼働日`;
       noteEl.innerHTML =
-        `サイクル ${cyc.label}　｜　経過 ${cyc.elapsedWorkDays}/${cyc.totalWorkDays}稼働日　｜　` +
+        `サイクル ${cyc.label}　｜　経過 ${cyc.elapsedWorkDays.toFixed(1)}/${cyc.totalWorkDays.toFixed(1)}稼働日　｜　` +
         `今日終わりの想定 ¥${expected.toLocaleString()}　｜　実績 ¥${grandTotalEffective.toLocaleString()}　` +
         `<span style="color:${diffColor};font-weight:700;">${diffText}</span>` +
         `<br><span style="opacity:0.75;">${cycleWhy}</span>`;
@@ -3906,7 +3958,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v31';
+      const CACHE_NAME = 'delivery-dashboard-personal-v32-1';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
