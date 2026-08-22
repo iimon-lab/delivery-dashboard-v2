@@ -1256,7 +1256,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-22 v33';
+const APP_BUILD = '2026-08-23 v34';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2887,8 +2887,30 @@ function recalcAll() {
   const fixedDaily = cycleWorkDays > 0 ? Math.ceil(target / cycleWorkDays) : 0;
   // v33: 当サイクルに間に合わない売上＝翌サイクルの原資（＝翌月の前月繰越になる分）
   const nextCycleCarry = hasGoalDay ? Math.max(0, deliveryTotal - deliveryTotalEffective) : 0;
-  // v33: 当サイクルに間に合う稼働日が尽きたか（残り有効稼働日が実質ゼロ）
-  const cycleClosed = hasGoalDay && target > 0 && effDenom <= 0.05;
+
+  // v34: 日別目標を「跳ね上がらない基準ペース」＋「遅れ／先行の実額」に置き換える。
+  // 想定額はサイクルの経過ぶん（進捗バーのペースマーカーと同じ基準）。
+  const cycExpected = (hasGoalDay && cyc.totalWorkDays > 0 && target > 0)
+    ? Math.round(target * cyc.elapsedWorkDays / cyc.totalWorkDays) : 0;
+  const cycDiff = (hasGoalDay && target > 0) ? (grandTotalEffective - cycExpected) : 0;
+  // 主力業者＝売上構成比が最大の業者。その当サイクル締切日が「遅れを取り戻せる期限」。
+  const shares34 = getCompanyShares();
+  let mainCo34 = null, mainShare34 = -1;
+  COMPANIES.forEach(co => { const s = shares34[co.id] || 0; if (s > mainShare34) { mainShare34 = s; mainCo34 = co; } });
+  const mainCutoffDay = (mainCo34 && goalDateCalc) ? getCompanyCutoffDay(curY, curM, mainCo34, goalDateCalc) : null;
+  const mainCutoffPassed = (mainCutoffDay && isCurrentMonth) ? (todayDate > mainCutoffDay) : false;
+  let paceDiffLine = '';
+  if (hasGoalDay && target > 0) {
+    const ahead34 = cycDiff >= 0;
+    let tail34 = '';
+    if (!ahead34 && mainCutoffDay && mainCo34) {
+      tail34 = mainCutoffPassed
+        ? `（${mainCo34.name}の当月分は締切済み）`
+        : `（${mainCo34.name}は ${curM}/${mainCutoffDay} までに上乗せ）`;
+    }
+    paceDiffLine = `<div class="summary-sub" style="color:${ahead34 ? 'var(--success)' : 'var(--danger)'}">`
+      + `${ahead34 ? '▲ 先行' : '▼ 遅れ'} ¥${Math.abs(cycDiff).toLocaleString()}${tail34}</div>`;
+  }
   // 日平均：休日売上はボーナス扱いで分母から除外（ペース判定の歪み防止）
   const avgPerDay = daysWorkedPlanned > 0 ? Math.round(deliveryPlanned / daysWorkedPlanned) : 0;
   const pct = target > 0 ? Math.min(999, Math.round(grandTotalEffective / target * 100)) : 0;
@@ -2986,11 +3008,11 @@ function recalcAll() {
     </div>
     <div class="summary-card daily">
       <div class="summary-label">日別目標</div>
-      <div class="summary-value" style="color:${cycleClosed ? 'var(--text-dim)' : 'var(--warning)'}; ${cycleClosed ? 'font-size:20px;' : ''}">${cycleClosed ? '締め切り' : `¥${dailyNeeded.toLocaleString()}`}</div>
-      <div class="summary-sub">${cycleClosed ? '当サイクルに間に合う稼働日は終了。以降の稼働は翌サイクル分' : `今日から必要（有効稼働日 ${effDenom.toFixed(1)}日${hasGoalDay ? '' : '・月末基準'}／暦 ${remainingWorkDays}日）`}</div>
+      <div class="summary-value" style="color:var(--warning)">¥${fixedDaily.toLocaleString()}</div>
+      <div class="summary-sub">1日あたりの基準ペース${hasGoalDay ? `（サイクル${cycleWorkDays.toFixed(1)}稼働日）` : `（月${cycleWorkDays.toFixed(1)}稼働日）`}</div>
+      ${paceDiffLine}
       ${nextCycleCarry > 0 ? `<div class="summary-sub" style="color:var(--rocket)">⏭ 翌サイクルへ先取り ¥${nextCycleCarry.toLocaleString()}</div>` : ''}
       ${cutoffLabel ? `<div class="summary-sub" style="color:var(--text-dim)">⏱ 稼働締切 ${cutoffLabel}</div>` : ''}
-      <div class="summary-sub" style="color:var(--text-dim)">標準ペース ¥${fixedDaily.toLocaleString()}${hasGoalDay ? `（サイクル${cycleWorkDays.toFixed(1)}稼働日）` : `（月${cycleWorkDays.toFixed(1)}稼働日）`}</div>
     </div>
   `;
 
@@ -3055,8 +3077,8 @@ function recalcAll() {
     if (!cycOk) {
       noteEl.innerHTML = '';
     } else {
-      const expected = Math.round(target * cyc.elapsedWorkDays / cyc.totalWorkDays);
-      const diff = grandTotalEffective - expected;
+      const expected = cycExpected;   // v34: 日別目標カードと同じ値を共用
+      const diff = cycDiff;
       const ahead = diff >= 0;
       const diffColor = ahead ? 'var(--success)' : 'var(--danger)';
       const diffText = `${ahead ? '+' : '−'}¥${Math.abs(diff).toLocaleString()} ${ahead ? '先行' : '遅れ'}`;
@@ -3963,7 +3985,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v33';
+      const CACHE_NAME = 'delivery-dashboard-personal-v34';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
