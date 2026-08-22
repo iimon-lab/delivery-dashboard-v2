@@ -138,6 +138,13 @@ body { overflow-x: hidden; }
 }
 .progress-stacked { display: flex; height: 100%; border-radius: 8px; overflow: hidden; }
 .progress-segment { height: 100%; transition: width 0.5s ease; min-width: 0; }
+/* v31: サイクルのペースマーカー（今日終わりに到達しているべき位置） */
+.pace-marker {
+  position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+  background: var(--text); opacity: 0.9; box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
+  transition: left 0.5s ease; pointer-events: none; z-index: 2;
+}
+.cycle-note { margin-top: 6px; font-size: 11px; color: var(--text-dim); line-height: 1.5; }
 
 /* Input Section */
 .input-section {
@@ -950,7 +957,7 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 <!-- Progress -->
 <div class="progress-section">
   <div class="progress-header">
-    <span>月間進捗（目標に充てる収入）</span>
+    <span id="progressTitle">月間進捗（目標に充てる収入）</span>
     <span style="display:flex;align-items:center;gap:8px;">
       <span id="paceIndicator"></span>
       <span id="progressLabel" class="mono">0%</span>
@@ -958,11 +965,13 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
   </div>
   <div class="progress-bar-bg">
     <div class="progress-stacked" id="progressStacked"></div>
+    <div class="pace-marker" id="paceMarker" style="display:none;"></div>
   </div>
   <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:11px; color:var(--text-dim);">
     <span>¥0</span>
     <span id="progressTarget" class="mono"></span>
   </div>
+  <div class="cycle-note" id="cycleNote"></div>
   <div class="breakdown" id="progressBreakdown"></div>
 </div>
 
@@ -1231,7 +1240,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-21 v30.1';
+const APP_BUILD = '2026-08-22 v31';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2638,6 +2647,56 @@ function getCycleWorkDays(curMonth, goalDay, curDays, curHolidays) {
   return workDays;
 }
 
+// ============ サイクル進捗（v31） ============
+// 1サイクル＝前月の目標日翌日〜当月の目標日。開始日・全稼働日・経過稼働日を返す。
+// 経過稼働日は「今日を含む」＝今日を終えた時点で到達しているべき水準を出すため。
+function getCycleInfo(curMonth, goalDay, curDays, curHolidays) {
+  const parts = curMonth.split('-').map(Number);
+  const cy = parts[0], cm = parts[1];
+  const endDay = goalDay > 0 ? Math.min(goalDay, curDays) : curDays;
+  const now = new Date();
+  const todayNum = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  const done = (y, m, d) => (y * 10000 + m * 100 + d) <= todayNum;
+
+  let startY = cy, startM = cm, startD = 1;
+  let prevTotal = 0, prevElapsed = 0, hasPrevSeg = false;
+  if (goalDay > 0) {
+    const prevM = cm === 1 ? 12 : cm - 1;
+    const prevY = cm === 1 ? cy - 1 : cy;
+    const prevKey = prevY + '-' + String(prevM).padStart(2, '0');
+    const prevData = data[prevKey] || {};
+    const prevGoalDay = prevData.payoutGoalDay || goalDay; // 前月未設定なら当月と同じ目標日で近似
+    const prevDays = new Date(prevY, prevM, 0).getDate();
+    const ps = prevGoalDay + 1;
+    if (ps <= prevDays) {
+      const prevHol = prevData.holidays || [];
+      for (let d = ps; d <= prevDays; d++) {
+        if (prevHol.indexOf(d) >= 0) continue;
+        prevTotal++;
+        if (done(prevY, prevM, d)) prevElapsed++;
+      }
+      startY = prevY; startM = prevM; startD = ps; hasPrevSeg = true;
+    }
+  }
+
+  const curHol = curHolidays || [];
+  let curTotal = 0, curElapsed = 0;
+  for (let d = 1; d <= endDay; d++) {
+    if (curHol.indexOf(d) >= 0) continue;
+    curTotal++;
+    if (done(cy, cm, d)) curElapsed++;
+  }
+
+  const total = prevTotal + curTotal;
+  const elapsed = Math.min(total, prevElapsed + curElapsed);
+  return {
+    label: startM + '/' + startD + '〜' + cm + '/' + endDay,
+    totalWorkDays: total,
+    elapsedWorkDays: elapsed,
+    hasPrevSeg: hasPrevSeg
+  };
+}
+
 // ============ CALC ============
 function recalcAll() {
   const rawTarget = document.getElementById('monthlyTarget').value;
@@ -2919,6 +2978,42 @@ function recalcAll() {
     paceEl.innerHTML = `<span style="color:${paceColor};font-weight:700;font-size:13px;">${paceText}</span>`;
   }
   document.getElementById('progressTarget').textContent = `¥${target.toLocaleString()}`;
+
+  // v31: サイクル進捗（見出し・ペースマーカー・注記）
+  const cyc = getCycleInfo(currentMonth, goalDay, days, holidays);
+  const titleEl = document.getElementById('progressTitle');
+  if (titleEl) {
+    titleEl.textContent = hasGoalDay
+      ? `サイクル進捗（${cyc.label}）`
+      : '月間進捗（目標に充てる収入）';
+  }
+  const markerEl = document.getElementById('paceMarker');
+  const noteEl = document.getElementById('cycleNote');
+  const cycOk = hasGoalDay && cyc.totalWorkDays > 0 && target > 0;
+  const pacePct = cycOk ? Math.min(100, cyc.elapsedWorkDays / cyc.totalWorkDays * 100) : 0;
+  if (markerEl) {
+    markerEl.style.display = (cycOk && pacePct > 0 && pacePct < 100) ? 'block' : 'none';
+    markerEl.style.left = pacePct + '%';
+  }
+  if (noteEl) {
+    if (!cycOk) {
+      noteEl.innerHTML = '';
+    } else {
+      const expected = Math.round(target * cyc.elapsedWorkDays / cyc.totalWorkDays);
+      const diff = grandTotalEffective - expected;
+      const ahead = diff >= 0;
+      const diffColor = ahead ? 'var(--success)' : 'var(--danger)';
+      const diffText = `${ahead ? '+' : '−'}¥${Math.abs(diff).toLocaleString()} ${ahead ? '先行' : '遅れ'}`;
+      const cycleWhy = cyc.hasPrevSeg
+        ? '前月の目標日翌日〜当月の目標日＝この引き落としに間に合う入金の範囲'
+        : '当月の目標日まで';
+      noteEl.innerHTML =
+        `サイクル ${cyc.label}　｜　経過 ${cyc.elapsedWorkDays}/${cyc.totalWorkDays}稼働日　｜　` +
+        `今日終わりの想定 ¥${expected.toLocaleString()}　｜　実績 ¥${grandTotalEffective.toLocaleString()}　` +
+        `<span style="color:${diffColor};font-weight:700;">${diffText}</span>` +
+        `<br><span style="opacity:0.75;">${cycleWhy}</span>`;
+    }
+  }
 
   let breakdownHtml = `<div class="breakdown-item"><div class="breakdown-dot" style="background:var(--uber)"></div>配達 ¥${deliveryTotalEffective.toLocaleString()}</div>`;
   if (carryover > 0) breakdownHtml += `<div class="breakdown-item"><div class="breakdown-dot" style="background:var(--rocket)"></div>前月繰越 ¥${carryover.toLocaleString()}</div>`;
@@ -3811,7 +3906,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v30-1';
+      const CACHE_NAME = 'delivery-dashboard-personal-v31';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
