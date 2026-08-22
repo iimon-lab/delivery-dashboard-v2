@@ -1256,7 +1256,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-23 v34';
+const APP_BUILD = '2026-08-23 v35';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2911,6 +2911,40 @@ function recalcAll() {
     paceDiffLine = `<div class="summary-sub" style="color:${ahead34 ? 'var(--success)' : 'var(--danger)'}">`
       + `${ahead34 ? '▲ 先行' : '▼ 遅れ'} ¥${Math.abs(cycDiff).toLocaleString()}${tail34}</div>`;
   }
+
+  // v35: 遅れを取り戻す窓＝「今日 〜 主力業者の当サイクル締切」の稼働日（休日を除く／今日を含む）。
+  // ここに遅れを配分して基準ペースに上乗せし、「今日狙うべき額」を1つの数字にする。
+  let catchUpDays = 0;
+  if (hasGoalDay && mainCutoffDay && !mainCutoffPassed) {
+    const now35 = new Date();
+    const ty35 = now35.getFullYear(), tm35 = now35.getMonth() + 1, td35 = now35.getDate();
+    // 当月セグメント：（今日 or 1日）〜 主力の締切日
+    const from35 = (ty35 === curY && tm35 === curM) ? td35 : 1;
+    for (let dd = from35; dd <= mainCutoffDay; dd++) {
+      if ((holidays || []).indexOf(dd) >= 0) continue;
+      catchUpDays++;
+    }
+    // 前月セグメント：今日がまだ前月内なら、今日〜前月末のうち当サイクルに入る日も取り戻し窓
+    if (cyc.hasPrevSeg) {
+      const pm35 = curM === 1 ? 12 : curM - 1;
+      const py35 = curM === 1 ? curY - 1 : curY;
+      if (ty35 === py35 && tm35 === pm35) {
+        const pd35 = data[py35 + '-' + String(pm35).padStart(2, '0')] || {};
+        const pHol35 = pd35.holidays || [];
+        const pDays35 = new Date(py35, pm35, 0).getDate();
+        const pGoal35 = getGoalDateForMonth(py35, pm35, pd35.payoutGoalDay || goalDay);
+        for (let dd = td35; dd <= pDays35; dd++) {
+          if (pHol35.indexOf(dd) >= 0) continue;
+          if (getCycleSegEff(py35, pm35, dd, dd, pHol35, goalDateCalc, pGoal35, null).eff > 0.001) catchUpDays++;
+        }
+      }
+    }
+  }
+  const catchUpPerDay = (catchUpDays > 0 && cycDiff < 0) ? Math.ceil(-cycDiff / catchUpDays) : 0;
+  const todayTarget = fixedDaily + catchUpPerDay;
+  const todayTargetSub = catchUpPerDay > 0
+    ? `基準 ¥${fixedDaily.toLocaleString()} ＋ 遅れ上乗せ ¥${catchUpPerDay.toLocaleString()}（${curM}/${mainCutoffDay}までの${catchUpDays}稼働日で配分）`
+    : `1日あたりの基準ペース${hasGoalDay ? `（サイクル${cycleWorkDays.toFixed(1)}稼働日）` : `（月${cycleWorkDays.toFixed(1)}稼働日）`}`;
   // 日平均：休日売上はボーナス扱いで分母から除外（ペース判定の歪み防止）
   const avgPerDay = daysWorkedPlanned > 0 ? Math.round(deliveryPlanned / daysWorkedPlanned) : 0;
   const pct = target > 0 ? Math.min(999, Math.round(grandTotalEffective / target * 100)) : 0;
@@ -3008,8 +3042,8 @@ function recalcAll() {
     </div>
     <div class="summary-card daily">
       <div class="summary-label">日別目標</div>
-      <div class="summary-value" style="color:var(--warning)">¥${fixedDaily.toLocaleString()}</div>
-      <div class="summary-sub">1日あたりの基準ペース${hasGoalDay ? `（サイクル${cycleWorkDays.toFixed(1)}稼働日）` : `（月${cycleWorkDays.toFixed(1)}稼働日）`}</div>
+      <div class="summary-value" style="color:var(--warning)">¥${todayTarget.toLocaleString()}</div>
+      <div class="summary-sub">${todayTargetSub}</div>
       ${paceDiffLine}
       ${nextCycleCarry > 0 ? `<div class="summary-sub" style="color:var(--rocket)">⏭ 翌サイクルへ先取り ¥${nextCycleCarry.toLocaleString()}</div>` : ''}
       ${cutoffLabel ? `<div class="summary-sub" style="color:var(--text-dim)">⏱ 稼働締切 ${cutoffLabel}</div>` : ''}
@@ -3985,7 +4019,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v34';
+      const CACHE_NAME = 'delivery-dashboard-personal-v35';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
