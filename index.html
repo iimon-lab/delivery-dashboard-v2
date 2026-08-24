@@ -148,6 +148,12 @@ body { overflow-x: hidden; }
 }
 .progress-stacked { display: flex; height: 100%; border-radius: 8px; overflow: hidden; }
 .progress-segment { height: 100%; transition: width 0.5s ease; min-width: 0; }
+/* v36: 本日の稼働を終えるボタン */
+.dayclose-btn{margin-top:9px;width:100%;padding:7px 8px;font-size:12px;font-weight:700;
+  border-radius:8px;cursor:pointer;background:transparent;color:var(--text-dim);
+  border:1px solid var(--border);line-height:1.3;}
+.dayclose-btn:hover{color:var(--text);}
+.dayclose-btn.on{color:var(--success);border-color:var(--success);}
 /* v31: サイクルのペースマーカー（今日終わりに到達しているべき位置） */
 .pace-marker {
   position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
@@ -1256,7 +1262,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-23 v35';
+const APP_BUILD = '2026-08-25 v36.1';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2747,6 +2753,24 @@ function getCycleInfo(curMonth, goalDay, curDays, curHolidays, goalDate) {
   };
 }
 
+// ============ v36: 本日の稼働を終える（日別目標を手動で明日ぶんへ送る） ============
+// 0時をまたぐのを待たずに「今日はもう走らない」を宣言し、明日狙うべき額をその場で出す。
+// 保存するのは締めた日付だけ。日付が変われば自動で解除される（従来の0時リセットと同じ挙動）。
+function todayKeyStr() {
+  const n = new Date();
+  return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+}
+function isDayClosed() {
+  try { return localStorage.getItem('dd_day_closed') === todayKeyStr(); } catch (e) { return false; }
+}
+function toggleDayClose() {
+  try {
+    if (isDayClosed()) localStorage.removeItem('dd_day_closed');
+    else localStorage.setItem('dd_day_closed', todayKeyStr());
+  } catch (e) {}
+  recalcAll();
+}
+
 // ============ CALC ============
 function recalcAll() {
   const rawTarget = document.getElementById('monthlyTarget').value;
@@ -2915,11 +2939,20 @@ function recalcAll() {
   // v35: 遅れを取り戻す窓＝「今日 〜 主力業者の当サイクル締切」の稼働日（休日を除く／今日を含む）。
   // ここに遅れを配分して基準ペースに上乗せし、「今日狙うべき額」を1つの数字にする。
   let catchUpDays = 0;
+  // v36: 本日を締めていれば、取り戻し窓の起点を翌日にずらす（今日はもう走らないので分母から外す）
+  // 適用条件＝今日がこのビューのサイクルに乗っていること。
+  // 当月ビューだけでなく、サイクルが前月にまたがるビュー（例 8/16〜9/25 を 9月ビューで見る）も対象。
+  const n36 = new Date();
+  const pm36 = curM === 1 ? 12 : curM - 1, py36 = curM === 1 ? curY - 1 : curY;
+  const todayInPrevSeg36 = !!cyc.hasPrevSeg && n36.getFullYear() === py36 && (n36.getMonth() + 1) === pm36;
+  const dayCloseApplies36 = isCurrentMonth || todayInPrevSeg36;
+  const dayClosed36 = dayCloseApplies36 && isDayClosed();
   if (hasGoalDay && mainCutoffDay && !mainCutoffPassed) {
     const now35 = new Date();
     const ty35 = now35.getFullYear(), tm35 = now35.getMonth() + 1, td35 = now35.getDate();
-    // 当月セグメント：（今日 or 1日）〜 主力の締切日
-    const from35 = (ty35 === curY && tm35 === curM) ? td35 : 1;
+    const base35 = dayClosed36 ? td35 + 1 : td35;
+    // 当月セグメント：（今日／締め済みなら明日 or 1日）〜 主力の締切日
+    const from35 = (ty35 === curY && tm35 === curM) ? base35 : 1;
     for (let dd = from35; dd <= mainCutoffDay; dd++) {
       if ((holidays || []).indexOf(dd) >= 0) continue;
       catchUpDays++;
@@ -2933,7 +2966,7 @@ function recalcAll() {
         const pHol35 = pd35.holidays || [];
         const pDays35 = new Date(py35, pm35, 0).getDate();
         const pGoal35 = getGoalDateForMonth(py35, pm35, pd35.payoutGoalDay || goalDay);
-        for (let dd = td35; dd <= pDays35; dd++) {
+        for (let dd = base35; dd <= pDays35; dd++) {
           if (pHol35.indexOf(dd) >= 0) continue;
           if (getCycleSegEff(py35, pm35, dd, dd, pHol35, goalDateCalc, pGoal35, null).eff > 0.001) catchUpDays++;
         }
@@ -2942,9 +2975,12 @@ function recalcAll() {
   }
   const catchUpPerDay = (catchUpDays > 0 && cycDiff < 0) ? Math.ceil(-cycDiff / catchUpDays) : 0;
   const todayTarget = fixedDaily + catchUpPerDay;
+  // v36: 締め済みのときは「明日ぶんの数字」であることを文言で明示する
+  const closedPrefix36 = dayClosed36 ? '本日は締め済み ─ ' : '';
+  const closedNoWindow36 = dayClosed36 && hasGoalDay && catchUpDays === 0 && cycDiff < 0;
   const todayTargetSub = catchUpPerDay > 0
-    ? `基準 ¥${fixedDaily.toLocaleString()} ＋ 遅れ上乗せ ¥${catchUpPerDay.toLocaleString()}（${curM}/${mainCutoffDay}までの${catchUpDays}稼働日で配分）`
-    : `1日あたりの基準ペース${hasGoalDay ? `（サイクル${cycleWorkDays.toFixed(1)}稼働日）` : `（月${cycleWorkDays.toFixed(1)}稼働日）`}`;
+    ? `${closedPrefix36}基準 ¥${fixedDaily.toLocaleString()} ＋ 遅れ上乗せ ¥${catchUpPerDay.toLocaleString()}（${curM}/${mainCutoffDay}までの${catchUpDays}稼働日で配分）`
+    : `${closedPrefix36}1日あたりの基準ペース${hasGoalDay ? `（サイクル${cycleWorkDays.toFixed(1)}稼働日）` : `（月${cycleWorkDays.toFixed(1)}稼働日）`}${closedNoWindow36 ? '／主力の当サイクル分は本日で締切' : ''}`;
   // 日平均：休日売上はボーナス扱いで分母から除外（ペース判定の歪み防止）
   const avgPerDay = daysWorkedPlanned > 0 ? Math.round(deliveryPlanned / daysWorkedPlanned) : 0;
   const pct = target > 0 ? Math.min(999, Math.round(grandTotalEffective / target * 100)) : 0;
@@ -3041,12 +3077,13 @@ function recalcAll() {
       <div class="summary-value" style="color:${surplusColor}">${surplusValue}</div>
     </div>
     <div class="summary-card daily">
-      <div class="summary-label">日別目標</div>
+      <div class="summary-label">${dayClosed36 ? '明日の目標' : '日別目標'}</div>
       <div class="summary-value" style="color:var(--warning)">¥${todayTarget.toLocaleString()}</div>
       <div class="summary-sub">${todayTargetSub}</div>
       ${paceDiffLine}
       ${nextCycleCarry > 0 ? `<div class="summary-sub" style="color:var(--rocket)">⏭ 翌サイクルへ先取り ¥${nextCycleCarry.toLocaleString()}</div>` : ''}
       ${cutoffLabel ? `<div class="summary-sub" style="color:var(--text-dim)">⏱ 稼働締切 ${cutoffLabel}</div>` : ''}
+      ${dayCloseApplies36 ? `<button class="dayclose-btn${dayClosed36 ? ' on' : ''}" onclick="toggleDayClose()">${dayClosed36 ? '✓ 本日は締め済み（戻す）' : '本日の稼働を終える'}</button>` : ''}
     </div>
   `;
 
@@ -4019,7 +4056,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v35';
+      const CACHE_NAME = 'delivery-dashboard-personal-v361';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
