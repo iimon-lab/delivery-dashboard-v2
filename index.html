@@ -1019,6 +1019,7 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
   <div class="tab" id="tabMainJob" onclick="switchTab('mainJob')">💼 本業収入</div>
   <div class="tab" id="tabExtra" onclick="switchTab('extra')">🎁 その他収入</div>
   <div class="tab" onclick="switchTab('payout')">💰 振込スケジュール</div>
+  <div class="tab" onclick="switchTab('living')">🍙 生活費</div>
 </div>
 
 <!-- Tab: Delivery -->
@@ -1063,6 +1064,27 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
   <div class="payout-section">
     <h2>💰 振込スケジュール</h2>
     <div class="payout-grid" id="payoutGrid"></div>
+  </div>
+</div>
+
+<!-- Tab: Living Expenses -->
+<div class="tab-content" id="tab-living">
+  <div class="input-section">
+    <h2>🍙 生活費トラッカー</h2>
+    <div class="summary-grid" id="livingSummaryGrid" style="margin-bottom:16px;"></div>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+      <input type="date" id="livingDateInput">
+      <input type="text" inputmode="numeric" id="livingAmountInput" placeholder="支出額" style="width:120px;">
+      <label style="display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text-dim);">
+        <input type="checkbox" id="livingChildCheck"> 子ども起因の休日
+      </label>
+      <button class="btn" onclick="addLivingEntryFromInput()">＋ 記録</button>
+    </div>
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:16px;">
+      基準日額 <input type="text" inputmode="numeric" id="livingRateInput" style="width:60px;" onchange="updateLivingRates()"> 円
+      子ども加算 <input type="text" inputmode="numeric" id="livingChildExtraInput" style="width:60px;" onchange="updateLivingRates()"> 円
+    </div>
+    <div class="extra-list" id="livingList"></div>
   </div>
 </div>
 
@@ -1262,7 +1284,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-25 v36.1';
+const APP_BUILD = '2026-08-27 v37';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1377,6 +1399,7 @@ function init() {
   setupSwipeMonthNavigation();
   setAppVersionLabel();
   render();
+  renderLiving();
 }
 
 // ============ SWIPE MONTH NAVIGATION (#30) ============
@@ -1866,6 +1889,158 @@ function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
   document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'living') renderLiving();
+}
+
+// ============ LIVING EXPENSES TRACKER (生活費トラッカー・2026-08-27追加) ============
+function getLivingRates() {
+  let rate = parseInt(localStorage.getItem('dd_living_rate'), 10);
+  let childExtra = parseInt(localStorage.getItem('dd_living_child_extra'), 10);
+  if (!rate || rate <= 0) rate = 1500;
+  if (isNaN(childExtra) || childExtra < 0) childExtra = 1500;
+  return { rate: rate, childExtra: childExtra };
+}
+function updateLivingRates() {
+  const rEl = document.getElementById('livingRateInput');
+  const cEl = document.getElementById('livingChildExtraInput');
+  const r = parseInt(String(rEl.value).replace(/[^0-9]/g, ''), 10) || 1500;
+  const cRaw = parseInt(String(cEl.value).replace(/[^0-9]/g, ''), 10);
+  localStorage.setItem('dd_living_rate', String(r));
+  localStorage.setItem('dd_living_child_extra', String(isNaN(cRaw) ? 1500 : cRaw));
+  renderLiving();
+}
+function loadLivingData() {
+  try { return JSON.parse(localStorage.getItem('dd_living')) || {}; } catch (e) { return {}; }
+}
+function saveLivingData(data) { localStorage.setItem('dd_living', JSON.stringify(data)); }
+
+function addLivingEntryFromInput() {
+  const dateEl = document.getElementById('livingDateInput');
+  const amtEl = document.getElementById('livingAmountInput');
+  const childEl = document.getElementById('livingChildCheck');
+  const date = dateEl.value || todayKeyStr();
+  const amount = parseInt(String(amtEl.value).replace(/[^0-9]/g, ''), 10) || 0;
+  const isChild = !!childEl.checked;
+  const data = loadLivingData();
+  data[date] = { amount: amount, child: isChild };
+  saveLivingData(data);
+  amtEl.value = '';
+  childEl.checked = false;
+  renderLiving();
+  showToast('保存しました');
+}
+
+function removeLivingEntry(date) {
+  const data = loadLivingData();
+  delete data[date];
+  saveLivingData(data);
+  renderLiving();
+}
+
+function computeLivingStats() {
+  const rates = getLivingRates();
+  const data = loadLivingData();
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
+
+  let targetCum = 0, actualCum = 0;
+  let lastEnteredDay = 0;
+  const entries = [];
+  Object.keys(data).forEach(function (dateStr) {
+    if (dateStr.indexOf(monthPrefix) !== 0) return;
+    const e = data[dateStr];
+    const t = rates.rate + (e.child ? rates.childExtra : 0);
+    targetCum += t;
+    actualCum += (e.amount || 0);
+    const dayNum = parseInt(dateStr.split('-')[2], 10);
+    if (dayNum > lastEnteredDay) lastEnteredDay = dayNum;
+    entries.push({ date: dateStr, amount: e.amount || 0, child: !!e.child, target: t });
+  });
+  entries.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+
+  const savings = targetCum - actualCum;
+
+  const startRemainDay = Math.max(lastEnteredDay + 1, now.getDate());
+  let remainNormal = 0, remainChild = 0;
+  for (let d = startRemainDay; d <= daysInMonth; d++) {
+    const dow = new Date(y, m, d).getDay();
+    if (dow === 6) remainChild++; else remainNormal++;
+  }
+  const remainDaysCount = remainNormal + remainChild;
+  const remainTargetSum = remainNormal * rates.rate + remainChild * (rates.rate + rates.childExtra);
+  const usableTotal = remainTargetSum + savings;
+  const usablePerDay = remainDaysCount > 0 ? Math.round(usableTotal / remainDaysCount) : 0;
+
+  return {
+    rates: rates, entries: entries, targetCum: targetCum, actualCum: actualCum, savings: savings,
+    remainDaysCount: remainDaysCount, remainTargetSum: remainTargetSum, usableTotal: usableTotal,
+    usablePerDay: usablePerDay, monthLabel: `${y}年${m + 1}月`
+  };
+}
+
+function renderLivingSummary(stats) {
+  const grid = document.getElementById('livingSummaryGrid');
+  if (!grid) return;
+  grid.innerHTML = `
+    <div class="summary-card daily">
+      <div class="summary-label">上限日額</div>
+      <div class="summary-value" style="font-size:24px;">¥${stats.rates.rate.toLocaleString()}</div>
+      <div class="summary-sub">子ども起因の休日は+¥${stats.rates.childExtra.toLocaleString()}</div>
+    </div>
+    <div class="summary-card pace">
+      <div class="summary-label">${stats.monthLabel} 貯金累計</div>
+      <div class="summary-value" style="font-size:24px; color:${stats.savings >= 0 ? 'var(--success)' : 'var(--danger)'};">${stats.savings >= 0 ? '+' : ''}¥${stats.savings.toLocaleString()}</div>
+      <div class="summary-sub">目標¥${stats.targetCum.toLocaleString()} / 実績¥${stats.actualCum.toLocaleString()}</div>
+    </div>
+    <div class="summary-card remaining">
+      <div class="summary-label">月末までの使える合計</div>
+      <div class="summary-value" style="font-size:24px;">¥${stats.usableTotal.toLocaleString()}</div>
+      <div class="summary-sub">残り${stats.remainDaysCount}日</div>
+    </div>
+    <div class="summary-card total">
+      <div class="summary-label">使用可能日額の目安</div>
+      <div class="summary-value" style="font-size:24px;">¥${stats.usablePerDay.toLocaleString()}</div>
+      <div class="summary-sub">残り日数で均等割り</div>
+    </div>
+  `;
+}
+
+function renderLivingList(stats) {
+  const list = document.getElementById('livingList');
+  if (!list) return;
+  if (stats.entries.length === 0) {
+    list.innerHTML = `<div style="color:var(--text-dim); font-size:13px;">まだ記録がありません</div>`;
+    return;
+  }
+  list.innerHTML = stats.entries.map(function (e) {
+    const diff = e.target - e.amount;
+    const diffColor = diff >= 0 ? 'var(--success)' : 'var(--danger)';
+    const dateShort = e.date.slice(5).replace('-', '/');
+    return `
+      <div class="extra-item">
+        <span style="flex:1;">${dateShort}${e.child ? ' 🍭子ども' : ''}</span>
+        <span style="flex:1; text-align:right;">¥${e.amount.toLocaleString()}</span>
+        <span style="flex:1; text-align:right; color:${diffColor}; font-size:12px;">${diff >= 0 ? '+' : ''}¥${diff.toLocaleString()}</span>
+        <button class="remove-btn" onclick="removeLivingEntry('${e.date}')">✕</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLiving() {
+  const rates = getLivingRates();
+  const rateInput = document.getElementById('livingRateInput');
+  const childExtraInput = document.getElementById('livingChildExtraInput');
+  if (rateInput && document.activeElement !== rateInput) rateInput.value = rates.rate;
+  if (childExtraInput && document.activeElement !== childExtraInput) childExtraInput.value = rates.childExtra;
+  const dateInput = document.getElementById('livingDateInput');
+  if (dateInput && !dateInput.value) dateInput.value = todayKeyStr();
+
+  const stats = computeLivingStats();
+  renderLivingSummary(stats);
+  renderLivingList(stats);
 }
 
 // ============ DATE UTILS ============
@@ -4056,7 +4231,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v361';
+      const CACHE_NAME = 'delivery-dashboard-personal-v37';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
