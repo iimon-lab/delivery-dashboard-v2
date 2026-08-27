@@ -1300,7 +1300,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-27 v38';
+const APP_BUILD = '2026-08-27 v39';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1937,10 +1937,13 @@ function livingDayTarget(rates, entry) {
 function computeLivingStats() {
   const rates = getLivingRates();
   const data = loadLivingData();
-  const now = new Date();
-  const y = now.getFullYear(), m = now.getMonth();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const monthPrefix = `${y}-${String(m + 1).padStart(2, '0')}-`;
+  // v39: 実時刻ではなく、画面が選択中の月（currentMonth）を基準にする
+  const [y, mo] = currentMonth.split('-').map(Number);
+  const m = mo - 1;
+  const daysInMonth = getDaysInMonth(currentMonth);
+  const monthPrefix = currentMonth + '-';
+  const realNow = new Date();
+  const isRealCurrentMonth = (realNow.getFullYear() === y && realNow.getMonth() === m);
 
   let targetCum = 0, actualCum = 0, lastEnteredDay = 0;
   Object.keys(data).forEach(function (dateStr) {
@@ -1954,7 +1957,8 @@ function computeLivingStats() {
   });
 
   const savings = targetCum - actualCum;
-  const startRemainDay = Math.max(lastEnteredDay + 1, now.getDate());
+  // 「残り日数からの使用可能日額」は実世界の今月を見ている時だけ意味を持つ
+  const startRemainDay = isRealCurrentMonth ? Math.max(lastEnteredDay + 1, realNow.getDate()) : daysInMonth + 1;
   let remainNormal = 0, remainChild = 0;
   for (let d = startRemainDay; d <= daysInMonth; d++) {
     const dow = new Date(y, m, d).getDay();
@@ -1966,10 +1970,10 @@ function computeLivingStats() {
   const usablePerDay = remainDaysCount > 0 ? Math.round(usableTotal / remainDaysCount) : 0;
 
   return {
-    rates: rates, data: data, y: y, m: m, daysInMonth: daysInMonth,
+    rates: rates, data: data, y: y, m: m, daysInMonth: daysInMonth, isRealCurrentMonth: isRealCurrentMonth,
     targetCum: targetCum, actualCum: actualCum, savings: savings,
     remainDaysCount: remainDaysCount, usableTotal: usableTotal, usablePerDay: usablePerDay,
-    monthLabel: `${y}年${m + 1}月`
+    monthLabel: `${y}年${mo}月`
   };
 }
 
@@ -2014,7 +2018,7 @@ function renderLivingCalendar(stats) {
   const y = stats.y, m = stats.m, daysInMonth = stats.daysInMonth;
   const firstDow = new Date(y, m, 1).getDay();
   const today = new Date();
-  const todayD = (today.getFullYear() === y && today.getMonth() === m) ? today.getDate() : 0;
+  const todayD = stats.isRealCurrentMonth ? today.getDate() : 0;
 
   let cells = '';
   for (let i = 0; i < firstDow; i++) cells += '<div class="living-cal-cell empty"></div>';
@@ -2286,6 +2290,7 @@ function render() {
   renderExtraIncome();
   renderHolidayCalendar();
   recalcAll();
+  renderLiving(); // v39: 月ナビゲーションのたびに生活費タブも選択中の月に追従させる
 }
 
 function renderDeliveryRows() {
@@ -4277,7 +4282,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v38';
+      const CACHE_NAME = 'delivery-dashboard-personal-v39';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
