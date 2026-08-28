@@ -840,7 +840,7 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 .living-cal-cell.today{border:2px solid var(--accent);box-shadow:0 0 0 2px var(--accent-dim);}
 .living-cal-dnum{font-size:11px;font-weight:700;color:var(--text-dim);}
 .living-cal-cell.sun .living-cal-dnum{color:#ff6b6b;} .living-cal-cell.sat .living-cal-dnum{color:#5b8def;}
-.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 4px;text-align:right;}
+input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 4px;text-align:right;}
 .living-cal-in::placeholder{color:#3a3a4a;}
 .living-cal-child{display:flex;align-items:center;gap:2px;font-size:9px;color:var(--text-dim);cursor:pointer;user-select:none;}
 .living-cal-child input{width:11px;height:11px;margin:0;}
@@ -1300,7 +1300,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-27 v39';
+const APP_BUILD = '2026-08-28 v40';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1949,7 +1949,7 @@ function computeLivingStats() {
   Object.keys(data).forEach(function (dateStr) {
     if (dateStr.indexOf(monthPrefix) !== 0) return;
     const e = data[dateStr];
-    if (!e || !e.amount) return; // 支出未入力の日はまだ集計に含めない（子どもチェックのみの日も同様）
+    if (!e || !e.entered) return; // 未入力（🍭チェックのみの日も含む）は集計に含めない。0円の明示入力は entered:true で区別する
     targetCum += livingDayTarget(rates, e);
     actualCum += e.amount;
     const dayNum = parseInt(dateStr.split('-')[2], 10);
@@ -2005,7 +2005,7 @@ function renderLivingSummary(stats) {
 }
 
 function livingCellDiffHtml(rates, entry, dd) {
-  if (!entry || !entry.amount) return `<div class="living-cal-diff" id="living-diff-${dd}"></div>`;
+  if (!entry || !entry.entered) return `<div class="living-cal-diff" id="living-diff-${dd}"></div>`;
   const target = livingDayTarget(rates, entry);
   const diff = target - entry.amount;
   const color = diff >= 0 ? 'var(--success)' : 'var(--danger)';
@@ -2027,7 +2027,7 @@ function renderLivingCalendar(stats) {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${dd}`;
     const dow = new Date(y, m, d).getDay();
     const entry = stats.data[dateStr];
-    const disp = (entry && entry.amount) ? entry.amount.toLocaleString() : '';
+    const disp = (entry && entry.entered) ? entry.amount.toLocaleString() : '';
     const checked = (entry && entry.child) ? 'checked' : '';
     let cls = 'living-cal-cell';
     if (dow === 0) cls += ' sun';
@@ -2035,7 +2035,7 @@ function renderLivingCalendar(stats) {
     if (d === todayD) cls += ' today';
     cells += `<div class="${cls}">`
       + `<div class="living-cal-dnum">${d}</div>`
-      + `<input type="text" class="living-cal-in" inputmode="numeric" placeholder="0" data-date="${dateStr}" value="${disp}" oninput="onLivingCalInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)">`
+      + `<input type="text" class="living-cal-in" inputmode="numeric" placeholder="0" data-date="${dateStr}" value="${disp}" oninput="onLivingCalInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)" onkeydown="onLivingCalKeydown(event, this)">`
       + `<label class="living-cal-child"><input type="checkbox" data-date="${dateStr}" ${checked} onchange="onLivingChildToggle(this)"> 🍭</label>`
       + livingCellDiffHtml(stats.rates, entry, dd)
       + `</div>`;
@@ -2045,13 +2045,19 @@ function renderLivingCalendar(stats) {
 
 function onLivingCalInput(el) {
   const date = el.dataset.date;
-  const amount = parseInt(String(el.value).replace(/[^0-9]/g, ''), 10) || 0;
+  const raw = String(el.value).replace(/[^0-9]/g, '');
   const data = loadLivingData();
   const existing = data[date] || { amount: 0, child: false };
-  if (amount > 0) {
-    data[date] = { amount: amount, child: existing.child };
+  if (raw === '') {
+    // 入力欄を空にした＝未入力に戻す（🍭チェックは保持）
+    if (existing.child) {
+      data[date] = { amount: 0, child: true, entered: false };
+    } else {
+      delete data[date];
+    }
   } else {
-    delete data[date];
+    // 「0」の明示入力も entered:true で記録する（未入力と区別）
+    data[date] = { amount: parseInt(raw, 10), child: existing.child, entered: true };
   }
   saveLivingData(data);
   updateLivingComputedViews();
@@ -2060,10 +2066,37 @@ function onLivingCalInput(el) {
 function onLivingChildToggle(el) {
   const date = el.dataset.date;
   const data = loadLivingData();
-  const existing = data[date] || { amount: 0, child: false };
-  data[date] = { amount: existing.amount || 0, child: !!el.checked };
+  const existing = data[date] || { amount: 0, child: false, entered: false };
+  data[date] = { amount: existing.amount || 0, child: !!el.checked, entered: !!existing.entered };
   saveLivingData(data);
   updateLivingComputedViews();
+}
+
+// v40: カレンダー内を矢印キー(↑↓←→)＋Enter（次の日へ）で移動できるように
+function onLivingCalKeydown(e, el) {
+  const key = e.key;
+  let delta = 0;
+  if (key === 'ArrowUp') delta = -7;
+  else if (key === 'ArrowDown') delta = 7;
+  else if (key === 'ArrowLeft') {
+    if (el.selectionStart > 0) return; // テキストカーソル移動を優先
+    delta = -1;
+  } else if (key === 'ArrowRight') {
+    if (el.selectionEnd < el.value.length) return;
+    delta = 1;
+  } else if (key === 'Enter') {
+    delta = 1; // 日次入力を上から順に進められるよう、次の日へ
+  } else {
+    return;
+  }
+  e.preventDefault();
+  const parts = el.dataset.date.split('-');
+  const d = parseInt(parts[2], 10) + delta;
+  const daysInMonth = getDaysInMonth(parts[0] + '-' + parts[1]);
+  if (d < 1 || d > daysInMonth) return;
+  const targetDate = `${parts[0]}-${parts[1]}-${String(d).padStart(2, '0')}`;
+  const target = document.querySelector(`.living-cal-in[data-date="${targetDate}"]`);
+  if (target) { target.focus(); target.select(); }
 }
 
 // 入力欄・チェックボックスのフォーカスを崩さないよう、カレンダー全体は再描画せず
@@ -4282,7 +4315,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v39';
+      const CACHE_NAME = 'delivery-dashboard-personal-v40';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
