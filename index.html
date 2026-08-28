@@ -1300,7 +1300,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-28 v41';
+const APP_BUILD = '2026-08-28 v42';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3272,18 +3272,15 @@ function recalcAll() {
     daysUntilPayLabel = '未設定';
   }
 
-  const achieved = grandTotalEffective >= target && target > 0;
-  const remainingLabel = achieved ? '達成！' : `¥${remaining.toLocaleString()}`;
-  const remainingColor = achieved ? 'var(--success)' : 'var(--danger)';
+  // v42: 「あと」と「不足額/余剰金」は (収入-目標) の表裏に過ぎず重複表示だったため1枚に統合（オーナー指摘）
+  // 未達成の間は「あと ¥不足額」、目標を超えたら「余剰金 ¥黒字額」に切り替える
+  const diff = (target > 0) ? (grandTotalEffective - target) : 0;
+  const hasSurplus = diff > 0;
+  const remainingCardLabel = hasSurplus ? '余剰金' : (target > 0 ? 'あと' : '余剰金');
+  const remainingValue = target > 0 ? `¥${Math.abs(diff).toLocaleString()}` : '¥0';
+  const remainingColor = hasSurplus ? 'var(--success)' : (target > 0 ? 'var(--danger)' : 'var(--text-dim)');
+  const remainingBorder = hasSurplus ? 'var(--success)' : (target > 0 ? 'var(--danger)' : 'var(--border)');
   const remainingSub = `目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}`;
-  // 余剰金 / 不足額：収入(繰越込＝進捗バーと同じ合計) − 目標。黒字=余剰金／赤字=不足額を額のみ表示
-  // v41: ガソリン代は支出項目「楽天カード」に既に含まれ目標額に織り込み済みのため、ここで再度引くと二重計上になる（オーナー指摘）
-  const surplus = (target > 0) ? (grandTotalEffective - target) : 0;
-  const hasSurplus = surplus > 0;
-  const surplusCardLabel = hasSurplus ? '余剰金' : (target > 0 ? '不足額' : '余剰金');
-  const surplusValue = hasSurplus ? `¥${surplus.toLocaleString()}` : (target > 0 ? `¥${Math.abs(surplus).toLocaleString()}` : '¥0');
-  const surplusColor = hasSurplus ? 'var(--success)' : (target > 0 ? 'var(--danger)' : 'var(--text-dim)');
-  const surplusBorder = hasSurplus ? 'var(--success)' : (target > 0 ? 'var(--danger)' : 'var(--border)');
 
   // Summary
   const showMJ = isMainJobVisible();
@@ -3337,14 +3334,10 @@ function recalcAll() {
       <div class="summary-value" style="color:var(--rocket); font-size:20px;">${daysUntilPayLabel}</div>
       <div class="summary-sub">${daysUntilPaySub}</div>
     </div>
-    <div class="summary-card remaining">
-      <div class="summary-label">あと</div>
-      <div class="summary-value" style="color:${remainingColor}">${remainingLabel}</div>
+    <div class="summary-card" style="border-left:3px solid ${remainingBorder};">
+      <div class="summary-label">${remainingCardLabel}</div>
+      <div class="summary-value" style="color:${remainingColor}">${remainingValue}</div>
       <div class="summary-sub">${remainingSub}</div>
-    </div>
-    <div class="summary-card" style="border-left:3px solid ${surplusBorder};">
-      <div class="summary-label">${surplusCardLabel}</div>
-      <div class="summary-value" style="color:${surplusColor}">${surplusValue}</div>
     </div>
     <div class="summary-card daily">
       <div class="summary-label">${dayClosed36 ? '明日の目標' : '日別目標'}</div>
@@ -4326,7 +4319,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v41';
+      const CACHE_NAME = 'delivery-dashboard-personal-v42';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
