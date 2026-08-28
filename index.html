@@ -1300,7 +1300,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-28 v40';
+const APP_BUILD = '2026-08-28 v41';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2035,7 +2035,7 @@ function renderLivingCalendar(stats) {
     if (d === todayD) cls += ' today';
     cells += `<div class="${cls}">`
       + `<div class="living-cal-dnum">${d}</div>`
-      + `<input type="text" class="living-cal-in" inputmode="numeric" placeholder="0" data-date="${dateStr}" value="${disp}" oninput="onLivingCalInput(this)" onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)" onkeydown="onLivingCalKeydown(event, this)">`
+      + `<input type="text" class="living-cal-in" inputmode="numeric" placeholder="0" data-date="${dateStr}" value="${disp}" oninput="onLivingCalInput(this)" onfocus="onLivingCalFocus(this)" onblur="onLivingCalBlur(this)" onkeydown="onLivingCalKeydown(event, this)">`
       + `<label class="living-cal-child"><input type="checkbox" data-date="${dateStr}" ${checked} onchange="onLivingChildToggle(this)"> 🍭</label>`
       + livingCellDiffHtml(stats.rates, entry, dd)
       + `</div>`;
@@ -2097,6 +2097,16 @@ function onLivingCalKeydown(e, el) {
   const targetDate = `${parts[0]}-${parts[1]}-${String(d).padStart(2, '0')}`;
   const target = document.querySelector(`.living-cal-in[data-date="${targetDate}"]`);
   if (target) { target.focus(); target.select(); }
+}
+
+// v41: 生活費カレンダー専用のフォーカス/ブラー処理。「0」を空文字に戻す配達時間枠共通の
+// onDailyFocus/onDailyBlur を流用すると、明示入力した0がグレーの未入力表示に戻ってしまうため分離
+function onLivingCalFocus(el) {
+  setTimeout(() => el.select(), 0);
+}
+function onLivingCalBlur(el) {
+  const raw = String(el.value).replace(/[^0-9]/g, '');
+  el.value = raw === '' ? '' : parseInt(raw, 10).toLocaleString();
 }
 
 // 入力欄・チェックボックスのフォーカスを崩さないよう、カレンダー全体は再描画せず
@@ -3266,8 +3276,9 @@ function recalcAll() {
   const remainingLabel = achieved ? '達成！' : `¥${remaining.toLocaleString()}`;
   const remainingColor = achieved ? 'var(--success)' : 'var(--danger)';
   const remainingSub = `目標 ¥${target.toLocaleString()}${carryover > 0 ? ` (繰越+¥${carryover.toLocaleString()})` : ''}`;
-  // 余剰金 / 不足額：収入(繰越込＝進捗バーと同じ合計) − ガソリン − 目標。黒字=余剰金／赤字=不足額を額のみ表示
-  const surplus = (target > 0) ? (grandTotalEffective - gasTotal - target) : 0;
+  // 余剰金 / 不足額：収入(繰越込＝進捗バーと同じ合計) − 目標。黒字=余剰金／赤字=不足額を額のみ表示
+  // v41: ガソリン代は支出項目「楽天カード」に既に含まれ目標額に織り込み済みのため、ここで再度引くと二重計上になる（オーナー指摘）
+  const surplus = (target > 0) ? (grandTotalEffective - target) : 0;
   const hasSurplus = surplus > 0;
   const surplusCardLabel = hasSurplus ? '余剰金' : (target > 0 ? '不足額' : '余剰金');
   const surplusValue = hasSurplus ? `¥${surplus.toLocaleString()}` : (target > 0 ? `¥${Math.abs(surplus).toLocaleString()}` : '¥0');
@@ -4315,7 +4326,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v40';
+      const CACHE_NAME = 'delivery-dashboard-personal-v41';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
