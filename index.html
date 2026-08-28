@@ -1300,7 +1300,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-28 v42';
+const APP_BUILD = '2026-08-28 v43';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -1959,10 +1959,13 @@ function computeLivingStats() {
   const savings = targetCum - actualCum;
   // 「残り日数からの使用可能日額」は実世界の今月を見ている時だけ意味を持つ
   const startRemainDay = isRealCurrentMonth ? Math.max(lastEnteredDay + 1, realNow.getDate()) : daysInMonth + 1;
+  // v43: 未入力の残り日数を「土曜=子どもの日」で決め打ちしない。
+  // その日にカレンダーで🍭チェックが付いているかどうかだけで判定する（オーナー指摘）
   let remainNormal = 0, remainChild = 0;
   for (let d = startRemainDay; d <= daysInMonth; d++) {
-    const dow = new Date(y, m, d).getDay();
-    if (dow === 6) remainChild++; else remainNormal++;
+    const dateStr = monthPrefix + String(d).padStart(2, '0');
+    const isChild = !!(data[dateStr] && data[dateStr].child);
+    if (isChild) remainChild++; else remainNormal++;
   }
   const remainDaysCount = remainNormal + remainChild;
   const remainTargetSum = remainNormal * rates.rate + remainChild * (rates.rate + rates.childExtra);
@@ -1987,7 +1990,7 @@ function renderLivingSummary(stats) {
       <div class="summary-sub">子ども起因の休日は+¥${stats.rates.childExtra.toLocaleString()}</div>
     </div>
     <div class="summary-card pace">
-      <div class="summary-label">${stats.monthLabel} 貯金累計</div>
+      <div class="summary-label">${stats.monthLabel} 予算差額累計</div>
       <div class="summary-value" style="font-size:24px; color:${stats.savings >= 0 ? 'var(--success)' : 'var(--danger)'};">${stats.savings >= 0 ? '+' : ''}¥${stats.savings.toLocaleString()}</div>
       <div class="summary-sub">目標¥${stats.targetCum.toLocaleString()} / 実績¥${stats.actualCum.toLocaleString()}</div>
     </div>
@@ -4319,7 +4322,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v42';
+      const CACHE_NAME = 'delivery-dashboard-personal-v43';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
