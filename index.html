@@ -880,6 +880,7 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
 :root[data-theme="light"] .dcal-chip.off{ color:#9aa0aa; }
 :root[data-theme="light"] .dcal-hours.empty{ color:#9aa0aa; }
 :root[data-theme="light"] .holiday-legend-swatch[style*="background:#333"]{ background:#cbd0d6 !important; }
+:root[data-theme="light"] .holiday-legend-swatch[style*="background:#4a4327"]{ background:#f5ecc9 !important; }
 /* テーマ切替ボタン */
 .theme-btn.active{ background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
 </style>
@@ -1032,6 +1033,7 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
     <div class="holiday-legend" id="holidayLegend">
       <div class="holiday-legend-item"><span class="holiday-legend-swatch" style="background:var(--danger);"></span>休日</div>
       <div class="holiday-legend-item"><span class="holiday-legend-swatch" style="background:#333;opacity:0.5;"></span>目標日までに振込なし</div>
+      <div class="holiday-legend-item"><span class="holiday-legend-swatch" style="background:#4a4327;"></span>一部の業者のみ振込が間に合う</div>
     </div>
   </div>
 </div>
@@ -1300,7 +1302,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-08-28 v43';
+const APP_BUILD = '2026-09-21 v44';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3063,6 +3065,8 @@ function recalcAll() {
   let deliveryTotal = 0, deliveryTotalEffective = 0, daysWorked = 0;
   // ペース判定用：休日に稼いだ日を分母から除外（休日売上はボーナス扱い）
   let daysWorkedPlanned = 0, deliveryPlanned = 0;
+  // v44: 休日設定日の稼働を別集計（日数・売上）
+  let holidayDaysWorked = 0, deliveryHoliday = 0;
   for (let d = 1; d <= days; d++) {
     const dd = String(d).padStart(2, '0');
     const dayData = (md.daily || {})[dd] || {};
@@ -3087,6 +3091,9 @@ function recalcAll() {
       if (!(md.holidays || []).includes(d)) {
         daysWorkedPlanned++;
         deliveryPlanned += dayTotal;
+      } else {
+        holidayDaysWorked++;
+        deliveryHoliday += dayTotal;
       }
     }
 
@@ -3122,13 +3129,22 @@ function recalcAll() {
   (md.mainJobItems || []).forEach(item => mainJobAmount += (item.amount || 0));
 
   // Hours total (stored in minutes)
-  let totalMinutes = 0;
+  let totalMinutes = 0, minutesHoliday = 0;
   for (let d = 1; d <= days; d++) {
     const dd = String(d).padStart(2, '0');
-    if (md.hours[dd]) totalMinutes += md.hours[dd];
+    if (md.hours[dd]) {
+      totalMinutes += md.hours[dd];
+      if ((md.holidays || []).includes(d)) minutesHoliday += md.hours[dd];
+    }
   }
   const totalHoursDecimal = minutesToDecimalHours(totalMinutes);
   const hourlyRate = totalHoursDecimal > 0 ? Math.round(deliveryTotal / totalHoursDecimal) : 0;
+  // v44: 通常稼働日／休日設定日の時間・時給
+  const minutesPlanned = totalMinutes - minutesHoliday;
+  const hoursPlannedDec = minutesToDecimalHours(minutesPlanned);
+  const hoursHolidayDec = minutesToDecimalHours(minutesHoliday);
+  const hourlyPlanned = hoursPlannedDec > 0 ? Math.round(deliveryPlanned / hoursPlannedDec) : 0;
+  const hourlyHoliday = hoursHolidayDec > 0 ? Math.round(deliveryHoliday / hoursHolidayDec) : 0;
 
   // Gas total
   let gasTotal = 0;
@@ -3308,6 +3324,15 @@ function recalcAll() {
     }).join(' ・ ');
   }
 
+  // v44: 稼働の内訳表示（通常稼働日＝主表示／休日稼働・合計＝参考）
+  const hasHolidayWork44 = holidayDaysWorked > 0 || minutesHoliday > 0;
+  const avgMinPlanned44 = daysWorkedPlanned > 0 ? Math.round(minutesPlanned / daysWorkedPlanned) : 0;
+  let workStatsHtml = `<div class="summary-sub">${hasHolidayWork44 ? '通常稼働 ' : ''}${daysWorkedPlanned}日${hasHolidayWork44 ? '' : '稼働'} / 日平均 ¥${avgPerDay.toLocaleString()}${minutesPlanned > 0 ? ` / ${formatHoursMinutes(minutesPlanned)}${avgMinPlanned44 > 0 ? `（1日 ${formatHoursMinutes(avgMinPlanned44)}）` : ''} / 時給 ¥${hourlyPlanned.toLocaleString()}` : ''}</div>`;
+  if (hasHolidayWork44) {
+    workStatsHtml += `<div class="summary-sub" style="color:var(--text-dim);">休日稼働 ${holidayDaysWorked}日${minutesHoliday > 0 ? ` / ${formatHoursMinutes(minutesHoliday)} / 時給 ¥${hourlyHoliday.toLocaleString()}` : ''}</div>`;
+    workStatsHtml += `<div class="summary-sub" style="color:var(--text-dim);">合計 ${daysWorked}日${totalMinutes > 0 ? ` / ${formatHoursMinutes(totalMinutes)} / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>`;
+  }
+
   document.getElementById('summaryGrid').innerHTML = `
     <div class="summary-card total">
       <div class="summary-label">目標に充てる収入</div>
@@ -3318,7 +3343,7 @@ function recalcAll() {
     <div class="summary-card delivery">
       <div class="summary-label">配達の稼ぎ（今月分）</div>
       <div class="summary-value" style="color:var(--uber)">¥${deliveryTotal.toLocaleString()}</div>
-      <div class="summary-sub">${daysWorked}日稼働 / 日平均 ¥${avgPerDay.toLocaleString()}${totalMinutes > 0 ? ` / ${formatHoursMinutes(totalMinutes)} / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>
+      ${workStatsHtml}
       ${gasTotal > 0 ? `<div class="summary-sub" style="color:var(--text-dim);">⛽ −¥${gasTotal.toLocaleString()} → 実質 ¥${netDelivery.toLocaleString()}</div>` : ''}
       ${totalCount > 0 ? `<div class="summary-sub" style="color:var(--text-dim);">🧮 ${totalCount}件 / 全体 @¥${unitOverall.toLocaleString()}/件${perCoStr ? ' ・ ' + perCoStr : ''}</div>` : ''}
     </div>
@@ -4180,6 +4205,8 @@ function calcPeriodSummary() {
   let deliveryTotal = 0, daysWorked = 0, totalMinutesPeriod = 0, gasTotal = 0, totalCountPeriod = 0;
   // 日平均：休日売上はボーナス扱いで分母から除外
   let daysWorkedPlanned = 0, deliveryPlanned = 0;
+  // v44: 休日設定日の稼働を別集計
+  let daysHolidayP = 0, deliveryHolidayP = 0, minutesHolidayP = 0;
 
   const cur = new Date(start);
   while (cur <= end) {
@@ -4200,14 +4227,21 @@ function calcPeriodSummary() {
         totalCountPeriod += c;
       });
       deliveryTotal += dayTotal;
+      const isHolP = (monthData.holidays || []).includes(dNum);
       if (dayTotal > 0) {
         daysWorked++;
-        if (!(monthData.holidays || []).includes(dNum)) {
+        if (!isHolP) {
           daysWorkedPlanned++;
           deliveryPlanned += dayTotal;
+        } else {
+          daysHolidayP++;
+          deliveryHolidayP += dayTotal;
         }
       }
-      if (monthData.hours && monthData.hours[dd]) totalMinutesPeriod += monthData.hours[dd];
+      if (monthData.hours && monthData.hours[dd]) {
+        totalMinutesPeriod += monthData.hours[dd];
+        if (isHolP) minutesHolidayP += monthData.hours[dd];
+      }
       if (monthData.gas && monthData.gas[dd]) gasTotal += monthData.gas[dd];
     }
     cur.setDate(cur.getDate() + 1);
@@ -4264,6 +4298,16 @@ function calcPeriodSummary() {
     html += `<div>時給換算: <span style="color:var(--warning);font-weight:700;">¥${hourlyRate.toLocaleString()}/h</span></div>`;
   }
   html += `</div>`;
+  // v44: 通常稼働日／休日設定日の内訳（休日稼働がある期間のみ）
+  if (daysHolidayP > 0 || minutesHolidayP > 0) {
+    const minPlanP = totalMinutesPeriod - minutesHolidayP;
+    const hrPlanP = minutesToDecimalHours(minPlanP);
+    const hrHolP = minutesToDecimalHours(minutesHolidayP);
+    const hourlyPlanP = hrPlanP > 0 ? Math.round(deliveryPlanned / hrPlanP) : 0;
+    const hourlyHolP = hrHolP > 0 ? Math.round(deliveryHolidayP / hrHolP) : 0;
+    html += `<div style="margin-top:8px;font-size:12px;color:var(--text-dim);">通常稼働 ${daysWorkedPlanned}日${minPlanP > 0 ? ` / ${formatHoursMinutes(minPlanP)} / 時給 ¥${hourlyPlanP.toLocaleString()}` : ''}</div>`;
+    html += `<div style="font-size:12px;color:var(--text-dim);">休日稼働 ${daysHolidayP}日${minutesHolidayP > 0 ? ` / ${formatHoursMinutes(minutesHolidayP)} / 時給 ¥${hourlyHolP.toLocaleString()}` : ''}</div>`;
+  }
 
   result.innerHTML = html;
 }
@@ -4322,7 +4366,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v43';
+      const CACHE_NAME = 'delivery-dashboard-personal-v44';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
