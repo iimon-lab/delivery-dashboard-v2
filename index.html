@@ -1302,7 +1302,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-10-04 v45';
+const APP_BUILD = '2026-10-04 v46';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3046,6 +3046,8 @@ function toggleDayClose() {
 }
 
 // ============ v45: 稼働時間のカウントダウン ============
+// v46: 現在は非表示（オーナー指示 2026-10-04）。再表示するには下を true にする。
+const SHOW_HOURS_CARD45 = false;
 // 月目標額 ÷ 目標時給 ＝ 月の目標稼働時間。設定はこの端末のlocalStorageに保存。
 function getHoursGoalAmount45() {
   try { const v = parseInt(localStorage.getItem('dd_hgoal_amount')); if (v > 0) return v; } catch (e) {}
@@ -3434,7 +3436,7 @@ function recalcAll() {
       ${cutoffLabel ? `<div class="summary-sub" style="color:var(--text-dim)">⏱ 稼働締切 ${cutoffLabel}</div>` : ''}
       ${dayCloseApplies36 ? `<button class="dayclose-btn${dayClosed36 ? ' on' : ''}" onclick="toggleDayClose()">${dayClosed36 ? '✓ 本日は締め済み（戻す）' : '本日の稼働を終える'}</button>` : ''}
     </div>
-    ${hoursCardHtml45}
+    ${SHOW_HOURS_CARD45 ? hoursCardHtml45 : ''}
   `;
 
   // Auto-size summary values for long amounts (7+ digits)
@@ -4425,7 +4427,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v45';
+      const CACHE_NAME = 'delivery-dashboard-personal-v46';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
