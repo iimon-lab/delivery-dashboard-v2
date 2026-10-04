@@ -1302,7 +1302,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-09-21 v44';
+const APP_BUILD = '2026-10-04 v45';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3045,6 +3045,27 @@ function toggleDayClose() {
   recalcAll();
 }
 
+// ============ v45: 稼働時間のカウントダウン ============
+// 月目標額 ÷ 目標時給 ＝ 月の目標稼働時間。設定はこの端末のlocalStorageに保存。
+function getHoursGoalAmount45() {
+  try { const v = parseInt(localStorage.getItem('dd_hgoal_amount')); if (v > 0) return v; } catch (e) {}
+  return 345000;
+}
+function getHoursGoalRate45() {
+  try { const v = parseInt(localStorage.getItem('dd_hgoal_rate')); if (v > 0) return v; } catch (e) {}
+  return 1500;
+}
+function setHoursGoal45(kind, raw) {
+  const v = parseInt(String(raw).replace(/[^0-9]/g, '')) || 0;
+  try { if (v > 0) localStorage.setItem(kind === 'rate' ? 'dd_hgoal_rate' : 'dd_hgoal_amount', String(v)); } catch (e) {}
+  recalcAll();
+}
+function fmtHM45(min) {
+  min = Math.max(0, Math.round(min));
+  const h = Math.floor(min / 60), m = min % 60;
+  return m === 0 ? h + 'h' : h + 'h' + String(m).padStart(2, '0') + 'm';
+}
+
 // ============ CALC ============
 function recalcAll() {
   const rawTarget = document.getElementById('monthlyTarget').value;
@@ -3333,6 +3354,43 @@ function recalcAll() {
     workStatsHtml += `<div class="summary-sub" style="color:var(--text-dim);">合計 ${daysWorked}日${totalMinutes > 0 ? ` / ${formatHoursMinutes(totalMinutes)} / 時給 ¥${hourlyRate.toLocaleString()}` : ''}</div>`;
   }
 
+  // v45: 稼働時間のカウントダウン（当月ビューのみ）
+  // 本日分は「本日の朝時点の残り ÷ 本日を含む残り稼働日」で目安を出し、記録済みの本日分を差し引いて「本日あと」にする（二重計上しない）
+  let hoursCardHtml45 = '';
+  if (isCurrentMonth) {
+    const gAmt45 = getHoursGoalAmount45(), gRate45 = getHoursGoalRate45();
+    const goalMin45 = Math.round(gAmt45 / gRate45 * 60);
+    const ddT45 = String(todayDate).padStart(2, '0');
+    const todayMin45 = (md.hours || {})[ddT45] || 0;
+    const todayIsHoliday45 = holidays.includes(todayDate);
+    const todayCounts45 = !todayIsHoliday45 && !dayClosed36;
+    let futureDays45 = 0;
+    for (let d45 = todayDate + 1; d45 <= days; d45++) { if (!holidays.includes(d45)) futureDays45++; }
+    const denom45 = futureDays45 + (todayCounts45 ? 1 : 0);
+    const base45 = todayCounts45 ? totalMinutes - todayMin45 : totalMinutes;
+    const perDay45 = denom45 > 0 ? Math.ceil(Math.max(0, goalMin45 - base45) / denom45 / 10) * 10 : 0;
+    const remain45 = Math.max(0, goalMin45 - totalMinutes);
+    let todayLine45;
+    if (remain45 <= 0) todayLine45 = '月の目標時間に到達 ✓';
+    else if (todayCounts45) {
+      const tr45 = Math.max(0, perDay45 - todayMin45);
+      todayLine45 = tr45 > 0
+        ? `本日あと ${fmtHM45(tr45)}（目安 ${fmtHM45(perDay45)}／記録 ${todayMin45 > 0 ? fmtHM45(todayMin45) : '0h'}）`
+        : `本日の目安 ${fmtHM45(perDay45)} クリア ✓`;
+    } else if (todayIsHoliday45) todayLine45 = '本日は休日設定（走った分は上乗せ）';
+    else todayLine45 = '本日は締め済み';
+    const inpStyle45 = 'width:78px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:12px;';
+    hoursCardHtml45 = `
+    <div class="summary-card" style="border-left:3px solid var(--accent);">
+      <div class="summary-label">稼働時間 カウントダウン（${curM}月）</div>
+      <div class="summary-value" style="color:var(--accent);font-size:26px;">${remain45 > 0 ? 'あと ' + fmtHM45(remain45) : '🎉 達成'}</div>
+      <div class="summary-sub">目標 ${fmtHM45(goalMin45)}（¥${gAmt45.toLocaleString()} ÷ 時給¥${gRate45.toLocaleString()}）／ 実績 ${totalMinutes > 0 ? fmtHM45(totalMinutes) : '0h'}</div>
+      <div class="summary-sub">${denom45 > 0 ? `1日あたり ${fmtHM45(perDay45)}（残り${denom45}稼働日）` : '残り稼働日なし'}</div>
+      <div class="summary-sub" style="color:var(--warning);">${todayLine45}</div>
+      <div class="summary-sub" style="color:var(--text-dim);">月目標額 <input type="number" inputmode="numeric" value="${gAmt45}" style="${inpStyle45}" onchange="setHoursGoal45('amount', this.value)"> 円　時給 <input type="number" inputmode="numeric" value="${gRate45}" style="width:64px;${inpStyle45.replace('width:78px;', '')}" onchange="setHoursGoal45('rate', this.value)"> 円</div>
+    </div>`;
+  }
+
   document.getElementById('summaryGrid').innerHTML = `
     <div class="summary-card total">
       <div class="summary-label">目標に充てる収入</div>
@@ -3376,6 +3434,7 @@ function recalcAll() {
       ${cutoffLabel ? `<div class="summary-sub" style="color:var(--text-dim)">⏱ 稼働締切 ${cutoffLabel}</div>` : ''}
       ${dayCloseApplies36 ? `<button class="dayclose-btn${dayClosed36 ? ' on' : ''}" onclick="toggleDayClose()">${dayClosed36 ? '✓ 本日は締め済み（戻す）' : '本日の稼働を終える'}</button>` : ''}
     </div>
+    ${hoursCardHtml45}
   `;
 
   // Auto-size summary values for long amounts (7+ digits)
@@ -4366,7 +4425,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v44';
+      const CACHE_NAME = 'delivery-dashboard-personal-v45';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
