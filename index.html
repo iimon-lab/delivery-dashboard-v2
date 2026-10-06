@@ -845,6 +845,14 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
 .living-cal-child{display:flex;align-items:center;gap:2px;font-size:9px;color:var(--text-dim);cursor:pointer;user-select:none;}
 .living-cal-child input{width:11px;height:11px;margin:0;}
 .living-cal-diff{font-size:9px;font-family:'JetBrains Mono',monospace;text-align:right;min-height:11px;}
+/* v47: 選択日の大表示パネル */
+.living-sel{position:sticky;top:0;z-index:20;background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:10px 14px;margin-bottom:12px;box-shadow:0 4px 12px rgba(0,0,0,.25);}
+.living-sel-date{font-size:13px;font-weight:700;color:var(--text-dim);}
+.living-sel-amount{font-family:'JetBrains Mono',monospace;font-size:40px;font-weight:700;line-height:1.15;color:var(--text);word-break:break-all;}
+.living-sel-sub{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);}
+.living-sel-hint{font-size:13px;color:var(--text-dim);}
+.living-cal-cell.selected{border:2px solid var(--rocket);}
+.living-cal-dnum{cursor:pointer;}
 @media (max-width:480px){
   .living-cal-grid, .living-cal-weekrow{gap:4px;}
   .living-cal-cell{padding:4px 3px 3px;min-height:60px;}
@@ -1101,6 +1109,7 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
       基準日額 <input type="text" inputmode="numeric" id="livingRateInput" style="width:60px;" onchange="updateLivingRates()"> 円
       子ども加算 <input type="text" inputmode="numeric" id="livingChildExtraInput" style="width:60px;" onchange="updateLivingRates()"> 円
     </div>
+    <div class="living-sel" id="livingSelPanel"></div>
     <div class="living-cal-weekrow"><span class="sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span></div>
     <div class="living-cal-grid" id="livingCalendarGrid"></div>
   </div>
@@ -1302,7 +1311,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-10-04 v46';
+const APP_BUILD = '2026-10-06 v47';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2039,7 +2048,7 @@ function renderLivingCalendar(stats) {
     if (dow === 6) cls += ' sat';
     if (d === todayD) cls += ' today';
     cells += `<div class="${cls}">`
-      + `<div class="living-cal-dnum">${d}</div>`
+      + `<div class="living-cal-dnum" onclick="selectLivingDate('${dateStr}', true)">${d}</div>`
       + `<input type="text" class="living-cal-in" inputmode="numeric" placeholder="0" data-date="${dateStr}" value="${disp}" oninput="onLivingCalInput(this)" onfocus="onLivingCalFocus(this)" onblur="onLivingCalBlur(this)" onkeydown="onLivingCalKeydown(event, this)">`
       + `<label class="living-cal-child"><input type="checkbox" data-date="${dateStr}" ${checked} onchange="onLivingChildToggle(this)"> 🍭</label>`
       + livingCellDiffHtml(stats.rates, entry, dd)
@@ -2107,6 +2116,7 @@ function onLivingCalKeydown(e, el) {
 // v41: 生活費カレンダー専用のフォーカス/ブラー処理。「0」を空文字に戻す配達時間枠共通の
 // onDailyFocus/onDailyBlur を流用すると、明示入力した0がグレーの未入力表示に戻ってしまうため分離
 function onLivingCalFocus(el) {
+  selectLivingDate(el.dataset.date, false);
   setTimeout(() => el.select(), 0);
 }
 function onLivingCalBlur(el) {
@@ -2127,6 +2137,48 @@ function updateLivingComputedViews() {
     if (!badge) continue;
     badge.outerHTML = livingCellDiffHtml(stats.rates, stats.data[dateStr], dd);
   }
+  renderLivingSelected(stats);
+}
+
+// v47: 選択日の大表示
+let livingSelectedDate = null;
+function selectLivingDate(dateStr, fromTap) {
+  livingSelectedDate = dateStr;
+  renderLivingSelected(computeLivingStats());
+  if (fromTap) {
+    const inp = document.querySelector('.living-cal-in[data-date="' + dateStr + '"]');
+    if (inp) inp.focus();
+  }
+}
+function renderLivingSelected(stats) {
+  const panel = document.getElementById('livingSelPanel');
+  if (!panel) return;
+  const prefix = stats.y + '-' + String(stats.m + 1).padStart(2, '0') + '-';
+  if (livingSelectedDate && livingSelectedDate.indexOf(prefix) !== 0) livingSelectedDate = null;
+  document.querySelectorAll('.living-cal-cell.selected').forEach(function (c) { c.classList.remove('selected'); });
+  if (!livingSelectedDate) {
+    panel.innerHTML = '<div class="living-sel-hint">日付か入力欄をタップすると、その日の金額がここに大きく表示されます</div>';
+    return;
+  }
+  const inp = document.querySelector('.living-cal-in[data-date="' + livingSelectedDate + '"]');
+  if (inp && inp.parentElement) inp.parentElement.classList.add('selected');
+  const parts = livingSelectedDate.split('-').map(Number);
+  const dows = ['日', '月', '火', '水', '木', '金', '土'];
+  const dow = dows[new Date(parts[0], parts[1] - 1, parts[2]).getDay()];
+  const entry = stats.data[livingSelectedDate];
+  let amountHtml, subHtml = '';
+  if (entry && entry.entered) {
+    amountHtml = '¥' + entry.amount.toLocaleString();
+    const target = livingDayTarget(stats.rates, entry);
+    const diff = target - entry.amount;
+    const color = diff >= 0 ? 'var(--success)' : 'var(--danger)';
+    subHtml = '上限 ¥' + target.toLocaleString() + ' ／ 差額 <span style="color:' + color + ';font-weight:700;">' + (diff >= 0 ? '+' : '') + '¥' + diff.toLocaleString() + '</span>';
+  } else {
+    amountHtml = '<span style="color:var(--text-dim);">未入力</span>';
+  }
+  panel.innerHTML = '<div class="living-sel-date">' + parts[1] + '月' + parts[2] + '日（' + dow + '）' + ((entry && entry.child) ? ' 🍭' : '') + '</div>'
+    + '<div class="living-sel-amount">' + amountHtml + '</div>'
+    + (subHtml ? '<div class="living-sel-sub">' + subHtml + '</div>' : '');
 }
 
 function renderLiving() {
@@ -2139,6 +2191,7 @@ function renderLiving() {
   const stats = computeLivingStats();
   renderLivingSummary(stats);
   renderLivingCalendar(stats);
+  renderLivingSelected(stats);
 }
 
 // ============ DATE UTILS ============
@@ -4427,7 +4480,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v46';
+      const CACHE_NAME = 'delivery-dashboard-personal-v47';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
