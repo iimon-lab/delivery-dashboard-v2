@@ -860,6 +860,33 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
   .living-cal-child{font-size:8px;}
 }
 :root[data-theme="light"] .living-cal-in::placeholder{color:#b3b8c0;}
+/* v48: 生活費タブを1画面に収めるコンパクト表示 */
+#tab-living .input-section{padding:10px 12px;margin-bottom:12px;}
+#tab-living .input-section h2{font-size:13px;margin-bottom:6px;}
+#livingSummaryGrid{grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px!important;}
+#livingSummaryGrid .summary-card{padding:8px 10px;}
+#livingSummaryGrid .summary-label{font-size:10px;margin-bottom:2px;letter-spacing:.5px;}
+#livingSummaryGrid .summary-value{font-size:20px!important;line-height:1.2;}
+#livingSummaryGrid .summary-sub{font-size:10px;margin-top:2px;}
+#tab-living .input-section > div[style*="margin-bottom:14px"]{margin-bottom:6px!important;}
+.living-sel{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;padding:5px 12px;margin-bottom:6px;border-radius:10px;}
+.living-sel-amount{font-size:26px;line-height:1.2;}
+.living-sel-date,.living-sel-sub,.living-sel-hint{font-size:12px;}
+.living-cal-weekrow{gap:4px;margin-bottom:3px;}
+.living-cal-grid{gap:4px;}
+.living-cal-cell{display:grid;grid-template-columns:1fr auto;gap:2px 4px;padding:4px 5px;min-height:0;border-radius:8px;}
+.living-cal-cell.empty{display:block;}
+.living-cal-cell .living-cal-dnum{grid-row:1;grid-column:1;}
+.living-cal-cell .living-cal-child{grid-row:1;grid-column:2;}
+.living-cal-cell input.living-cal-in{grid-row:2;grid-column:1 / -1;padding:2px 4px;}
+.living-cal-cell .living-cal-diff{grid-row:3;grid-column:1 / -1;min-height:10px;line-height:1.1;}
+@media (max-width:768px){
+  #livingSummaryGrid{grid-template-columns:repeat(2,1fr);}
+  #livingSummaryGrid .summary-value{font-size:18px!important;}
+}
+@media (max-width:480px){
+  .living-cal-cell{padding:3px 3px 2px;min-height:0;}
+}
 
 /* ===== ライトモード（data-theme=light） ===== */
 :root[data-theme="light"]{
@@ -1311,7 +1338,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-10-06 v47';
+const APP_BUILD = '2026-10-17 v48';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -4480,7 +4507,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v47';
+      const CACHE_NAME = 'delivery-dashboard-personal-v48';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
