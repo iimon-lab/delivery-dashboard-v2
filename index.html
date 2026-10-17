@@ -887,6 +887,15 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
 @media (max-width:480px){
   .living-cal-cell{padding:3px 3px 2px;min-height:0;}
 }
+/* v49: マス内の数字を大きく（PC基準・スマホは少し控えめ） */
+.living-cal-cell .living-cal-dnum{font-size:12px;}
+.living-cal-cell input.living-cal-in{font-size:14px;padding:3px 5px;}
+.living-cal-cell .living-cal-diff{font-size:12px;min-height:14px;}
+@media (max-width:768px){
+  .living-cal-cell .living-cal-dnum{font-size:11px;}
+  .living-cal-cell input.living-cal-in{font-size:12px;padding:2px 3px;}
+  .living-cal-cell .living-cal-diff{font-size:10px;min-height:12px;}
+}
 
 /* ===== ライトモード（data-theme=light） ===== */
 :root[data-theme="light"]{
@@ -1338,7 +1347,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-10-17 v48';
+const APP_BUILD = '2026-10-17 v49';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -4507,7 +4516,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v48';
+      const CACHE_NAME = 'delivery-dashboard-personal-v49';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
