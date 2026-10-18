@@ -1347,7 +1347,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-10-17 v49';
+const APP_BUILD = '2026-10-19 v50';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2354,14 +2354,14 @@ function isDayPartialPayout(workDay, y, m, goalDate) {
 const DEFAULT_WITHDRAWAL_DAY = 27;
 function getRememberedWithdrawalDay() {
   try {
-    const v = parseInt(localStorage.getItem('dd_withdrawal_day'));
+    const v = parseInt(localStorage.getItem('dd_withdrawal_day_v2'));
     if (v >= 1 && v <= 31) return v;
   } catch (e) {}
   return DEFAULT_WITHDRAWAL_DAY;
 }
 function rememberWithdrawalDay(v) {
   try {
-    if (v >= 1 && v <= 31) localStorage.setItem('dd_withdrawal_day', String(v));
+    if (v >= 1 && v <= 31) localStorage.setItem('dd_withdrawal_day_v2', String(v));
   } catch (e) {}
 }
 // 自動継承してよい月かどうか（過去月・既に目標日がある月には触らない）
@@ -2438,7 +2438,8 @@ function renderDeliveryRows() {
   if (!md.daily) md.daily = {};
   const days = getDaysInMonth(currentMonth);
   const colCount = COMPANIES.length;
-  const gridCols = `80px ${Array(colCount).fill('minmax(90px, 1fr)').join(' ')} 70px 70px 110px 54px`;
+  const showGas = !!loadCalRows().gas; // v50: ガソリン代欄はカレンダー入力のチップで切替（既定オフ）
+  const gridCols = `80px ${Array(colCount).fill('minmax(90px, 1fr)').join(' ')} 70px ${showGas ? '70px ' : ''}110px 54px`;
 
   // 振込グレーアウト判定用
   const [gy, gm] = currentMonth.split('-').map(Number);
@@ -2451,7 +2452,7 @@ function renderDeliveryRows() {
       <div>日付</div>
       ${COMPANIES.map(co => `<div style="color:${co.color}">${co.name}</div>`).join('')}
       <div>時間</div>
-      <div>⛽</div>
+      ${showGas ? '<div>⛽</div>' : ''}
       <div>合計</div>
       <div></div>
     </div>
@@ -2487,12 +2488,12 @@ function renderDeliveryRows() {
       <div class="hours-field">
         <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" tabindex="0" onkeydown="onHoursKeydown(event)" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
       </div>
-      <input type="text" inputmode="numeric" class="daily-input" placeholder="0"
+      ${showGas ? `<input type="text" inputmode="numeric" class="daily-input" placeholder="0"
         data-day="${dd}" data-type="gas"
         value="${md.gas[dd] ? md.gas[dd].toLocaleString() : ''}"
         oninput="onGasInput(this)"
         onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"
-        style="width:60px;font-size:13px;padding:6px 4px;color:var(--danger);">
+        style="width:60px;font-size:13px;padding:6px 4px;color:var(--danger);">` : ''}
       <div class="day-total mono" id="total-${dd}">¥0</div>
       <button class="daily-result-btn" id="dr-btn-${dd}" onclick="openDailyResult('${dd}')">日計</button>
     `;
@@ -2537,7 +2538,7 @@ function renderDeliveryRows() {
             <div class="hours-tap${md.hours[dd] ? '' : ' empty'}" data-day="${dd}" tabindex="0" onkeydown="onHoursKeydown(event)" onclick="openDrumPicker('${dd}')">${md.hours[dd] ? Math.floor(md.hours[dd]/60)+':'+String(md.hours[dd]%60).padStart(2,'0') : '-'}</div>
           </div>
         </div>
-        <div class="day-card-field">
+        ${showGas ? `<div class="day-card-field">
           <span class="field-dot" style="background:var(--danger)"></span>
           <span class="field-label">ガソリン代</span>
           <input type="text" class="daily-input" inputmode="numeric" placeholder="0"
@@ -2546,7 +2547,7 @@ function renderDeliveryRows() {
             oninput="onGasInput(this)"
             onfocus="onDailyFocus(this)" onblur="onDailyBlur(this)"
             style="color:var(--danger);">
-        </div>
+        </div>` : ''}
       </div>
     `;
     container.appendChild(card);
@@ -2568,7 +2569,8 @@ function toggleCalRow(key) {
   const v = loadCalRows();
   v[key] = !v[key];
   saveCalRows(v);
-  renderDeliveryCalendar();
+  if (key === 'gas') renderDeliveryRows(); // v50: 一覧・カードのガソリン欄もチップに連動（内部でカレンダーも再描画）
+  else renderDeliveryCalendar();
   recalcAll();
 }
 function loadDeliveryView() {
@@ -4516,7 +4518,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v49';
+      const CACHE_NAME = 'delivery-dashboard-personal-v50';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
