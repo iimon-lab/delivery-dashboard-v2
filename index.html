@@ -927,6 +927,14 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
 :root[data-theme="light"] .holiday-legend-swatch[style*="background:#4a4327"]{ background:#f5ecc9 !important; }
 /* テーマ切替ボタン */
 .theme-btn.active{ background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
+/* v51: 休日行の入力数字を見やすく（行全体を薄くせず、日付ラベルだけ減光＋取り消し線で休日を示す） */
+.input-row.off-day { opacity: 1; }
+.input-row.off-day .date-label { opacity: 0.55; }
+.input-row.off-day .daily-input { color: var(--text); background: var(--surface2); border-color: var(--border); }
+.input-row.off-day .daily-input::placeholder { color: var(--text-dim); opacity: 0.8; }
+.day-card.off-day { opacity: 1; }
+.day-card.off-day .day-card-header { opacity: 0.55; }
+.day-card.off-day .daily-input { color: var(--text); }
 </style>
 </head>
 <body>
@@ -1347,7 +1355,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-10-19 v50';
+const APP_BUILD = '2026-10-21 v51';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -4518,7 +4526,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v50';
+      const CACHE_NAME = 'delivery-dashboard-personal-v51';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
