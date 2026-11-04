@@ -207,6 +207,8 @@ input.daily-input.no-payout-input { opacity: 0.35; background: #333; }
 .date-label .dow { font-size: 11px; color: var(--text-dim); margin-left: 4px; }
 .date-label .dow.sat { color: var(--rocket); }
 .date-label .dow.sun { color: var(--danger); }
+.hol-tag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 5px; background: var(--danger); color: #fff; font-family: sans-serif; font-size: 10px; font-weight: 700; line-height: 1.5; vertical-align: middle; text-decoration: none; }
+.dcal-cell .hol-tag { margin-left: 3px; padding: 0 4px; font-size: 9px; }
 
 input[type="number"], input[type="text"] {
   background: var(--surface2); border: 1px solid var(--border); color: var(--text);
@@ -929,11 +931,12 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
 .theme-btn.active{ background:var(--accent); color:#000; border-color:var(--accent); font-weight:700; }
 /* v51: 休日行の入力数字を見やすく（行全体を薄くせず、日付ラベルだけ減光＋取り消し線で休日を示す） */
 .input-row.off-day { opacity: 1; }
-.input-row.off-day .date-label { opacity: 0.55; }
+.input-row.off-day .date-label { opacity: 1; color: var(--text-dim); }
 .input-row.off-day .daily-input { color: var(--text); background: var(--surface2); border-color: var(--border); }
 .input-row.off-day .daily-input::placeholder { color: var(--text-dim); opacity: 0.8; }
 .day-card.off-day { opacity: 1; }
-.day-card.off-day .day-card-header { opacity: 0.55; }
+.day-card.off-day .day-card-header { opacity: 1; }
+.day-card.off-day .day-card-header .date-label { color: var(--text-dim); }
 .day-card.off-day .daily-input { color: var(--text); }
 </style>
 </head>
@@ -1355,7 +1358,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-10-27 v52';
+const APP_BUILD = '2026-11-04 v53';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -2481,7 +2484,7 @@ function renderDeliveryRows() {
     row.className = 'input-row';
     row.style.gridTemplateColumns = gridCols;
     row.innerHTML = `
-      <div class="date-label">${d}<span class="dow ${dowCls}">${DOW_JP[dow]}</span></div>
+      <div class="date-label">${d}<span class="dow ${dowCls}">${DOW_JP[dow]}</span>${isHoliday ? '<span class="hol-tag">休日</span>' : ''}</div>
       ${COMPANIES.map(co => {
         const rawVal = md.daily[dd][co.id] || 0;
         const dispVal = rawVal ? rawVal.toLocaleString() : '';
@@ -2517,7 +2520,7 @@ function renderDeliveryRows() {
     if (isHoliday) card.classList.add('off-day');
     card.innerHTML = `
       <div class="day-card-header">
-        <div class="date-label">${d}<span class="dow ${dowCls}">${DOW_JP[dow]}</span></div>
+        <div class="date-label">${d}<span class="dow ${dowCls}">${DOW_JP[dow]}</span>${isHoliday ? '<span class="hol-tag">休日</span>' : ''}</div>
         <div style="display:flex;align-items:center;gap:8px;">
           <button class="daily-result-btn" id="dr-btn-m-${dd}" onclick="openDailyResult('${dd}')">日計</button>
           <div class="day-total mono" id="total-m-${dd}">¥0</div>
@@ -2650,7 +2653,7 @@ function renderDeliveryCalendar() {
     if (dow === 6) cls += ' sat';
     if (d === todayD) cls += ' today';
     if (isHol) cls += ' hol';
-    let inner = '<div class="dcal-head"><span class="dcal-dnum">' + d + '<span class="dcal-dow">' + DOW_JP[dow] + '</span></span>' + (d === todayD ? '<span class="dcal-badge">今日</span>' : '') + '<span class="dcal-tot" id="total-c-' + dd + '">¥0</span></div>';
+    let inner = '<div class="dcal-head"><span class="dcal-dnum">' + d + '<span class="dcal-dow">' + DOW_JP[dow] + '</span>' + (isHol ? '<span class="hol-tag">休</span>' : '') + '</span>' + (d === todayD ? '<span class="dcal-badge">今日</span>' : '') + '<span class="dcal-tot" id="total-c-' + dd + '">¥0</span></div>';
     COMPANIES.forEach(function(co){
       if (rows[co.id] === false) return;
       const raw = md.daily[dd][co.id] || 0;
@@ -4529,7 +4532,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v52';
+      const CACHE_NAME = 'delivery-dashboard-personal-v53';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
