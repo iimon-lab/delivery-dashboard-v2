@@ -418,8 +418,14 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 }
 .holiday-cell:active { transform: scale(0.9); }
 .holiday-cell.holiday { background: var(--danger); color: #fff; font-weight: 700; border-color: var(--danger); }
-.holiday-cell.today { border-color: var(--accent); }
-.holiday-cell.today.holiday { border-color: #fff; }
+.holiday-cell { position: relative; }
+.holiday-cell.today { border-color: var(--accent); border-width: 3px; font-weight: 700; }
+.holiday-cell.today.holiday { border-color: var(--accent); }
+.holiday-cell.today::before {
+  content: '今日'; position: absolute; top: 2px; left: 0; right: 0; text-align: center;
+  font-family: 'DM Sans', sans-serif; font-size: 9px; font-weight: 700; line-height: 1; color: var(--accent);
+}
+.holiday-cell.today.holiday::before { color: #fff; }
 .holiday-cell.empty { background: none; cursor: default; pointer-events: none; }
 .holiday-cell.sun-col { color: var(--danger); }
 .holiday-cell.sat-col { color: var(--rocket); }
@@ -427,6 +433,12 @@ input.count-input { font-size: 12px; padding: 4px 6px; text-align: right; font-f
 .holiday-cell.no-payout { opacity: 0.35; background: #333; color: var(--text-dim); }
 .holiday-cell.no-payout.holiday { opacity: 0.3; background: #553333; }
 .holiday-cell.part-payout { background: #4a4327; color: #e8dcae; }
+/* v54: 休日設定は黄土色より優先して赤で表示。黄土色だった事実は右下の点で残す */
+.holiday-cell.holiday.part-payout { background: var(--danger); color: #fff; border-color: var(--danger); }
+.holiday-cell.holiday.part-payout.today { border-color: var(--accent); }
+.holiday-cell.holiday.part-payout::after {
+  content: ''; position: absolute; right: 5px; bottom: 5px; width: 7px; height: 7px; border-radius: 50%; background: #f2d96b;
+}
 .holiday-legend { font-size: 11px; color: var(--text-dim); margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .holiday-legend-item { display: flex; align-items: center; gap: 5px; }
 .holiday-legend-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
@@ -913,6 +925,7 @@ input.living-cal-in{width:100%;background:var(--surface2);border:1px solid var(-
 :root[data-theme="light"] .holiday-cell.no-payout{ background:#e4e7eb !important; }
 :root[data-theme="light"] .holiday-cell.no-payout.holiday{ background:#f3d6d6 !important; }
 :root[data-theme="light"] .holiday-cell.part-payout{ background:#f5ecc9 !important; color:#7a6a2a !important; }
+:root[data-theme="light"] .holiday-cell.holiday.part-payout{ background:var(--danger) !important; color:#fff !important; }
 :root[data-theme="light"] .source-manager{ background:#f0f2f5; }
 :root[data-theme="light"] .source-manager h3{ color:#5f6571; }
 :root[data-theme="light"] .source-item{ background:#ffffff; border:1px solid #d7dbe0; }
@@ -1358,7 +1371,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-11-04 v53';
+const APP_BUILD = '2026-11-08 v54';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -4532,7 +4545,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v53';
+      const CACHE_NAME = 'delivery-dashboard-personal-v54';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
