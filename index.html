@@ -1371,7 +1371,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-11-08 v54';
+const APP_BUILD = '2026-11-15 v55';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3047,6 +3047,49 @@ function getCarryoverFromPrevMonth(curMonth) {
   return carryover;
 }
 
+// ============ v55: 前月の同じ日との比較 ============
+// 「前月の同日時点で、前月サイクルの目標に対してどこまで進んでいたか」を返す。
+// 前月の目標＝前月の支出項目の合計。実績＝（その日までの前月配達のうち前月目標日までに入金される分）＋前月へ繰越された額＋その他＋本業。
+// その他収入・本業収入は日付を持たないため月全体の額で計算する。
+function getPrevSameDaySnapshot55(curMonth, todayDay, fallbackGoalDay) {
+  const parts = curMonth.split('-').map(Number);
+  const cy = parts[0], cm = parts[1];
+  const pm = cm === 1 ? 12 : cm - 1;
+  const py = cm === 1 ? cy - 1 : cy;
+  const pKey = py + '-' + String(pm).padStart(2, '0');
+  const pd = data[pKey];
+  if (!pd || !pd.daily) return null;
+  const pTarget = (pd.expenseItems || []).reduce((s, it) => s + (parseInt(it.amount) || 0), 0);
+  if (pTarget <= 0) return null;
+  const pDays = new Date(py, pm, 0).getDate();
+  const pGoalDay = pd.payoutGoalDay || fallbackGoalDay || 0;
+  const pGoalDate = getGoalDateForMonth(py, pm, pGoalDay);
+  const endDay = pGoalDay > 0 ? Math.min(pGoalDay, pDays) : pDays;
+  const asOf = Math.min(todayDay, endDay, pDays);
+  let eff = 0;
+  for (let d = 1; d <= asOf; d++) {
+    const dayData = pd.daily[String(d).padStart(2, '0')] || {};
+    COMPANIES.forEach(co => {
+      const amt = dayData[co.id] || 0;
+      if (amt <= 0) return;
+      if (pGoalDate) {
+        const pay = getPayoutDateForDay(d, py, pm, co);
+        if (pay === null || pay <= pGoalDate) eff += amt;
+      } else {
+        eff += amt;
+      }
+    });
+  }
+  const carry = getCarryoverFromPrevMonth(pKey);
+  let extra = 0;
+  EXTRA_FIXED.forEach(e => { extra += ((pd.extraFixed || {})[e.id] || 0); });
+  (pd.extraItems || []).forEach(it => { extra += (it.amount || 0); });
+  let main = 0;
+  (pd.mainJobItems || []).forEach(it => { main += (it.amount || 0); });
+  const total = eff + carry + extra + main;
+  return { pm: pm, asOf: asOf, clamped: asOf < todayDay, target: pTarget, total: total, remain: pTarget - total };
+}
+
 // ============ サイクル全稼働日（固定レート用） ============
 // 目標日を締切とした1サイクル＝前月の目標日翌日〜当月の目標日。その稼働日数（暦日−休日）を返す。
 function getCycleWorkDays(curMonth, goalDay, curDays, curHolidays) {
@@ -3624,6 +3667,40 @@ function recalcAll() {
       const diffColor = ahead ? 'var(--success)' : 'var(--danger)';
       const diffText = `${ahead ? '+' : '−'}¥${Math.abs(diff).toLocaleString()} ${ahead ? '先行' : '遅れ'}`;
       const goalLabel = payDate ? formatDate(payDate) : `${curM}/${endDay}`;
+      // v55: 前月の同じ日との比較（実績・達成率・あと）
+      let cmpHtml55 = '';
+      if (isCurrentMonth) {
+        const ps55 = getPrevSameDaySnapshot55(currentMonth, todayDate, goalDay);
+        if (ps55) {
+          const yen55 = n => '¥' + Math.abs(n).toLocaleString();
+          const curPct55 = grandTotalEffective / target * 100;
+          const prePct55 = ps55.total / ps55.target * 100;
+          const dAmt55 = grandTotalEffective - ps55.total;
+          const dPct55 = curPct55 - prePct55;
+          const curRemain55 = target - grandTotalEffective;
+          const dRemain55 = curRemain55 - ps55.remain;
+          const remainTxt55 = n => (n < 0 ? '余剰 ' : '') + yen55(n);
+          const good55 = 'var(--success)', bad55 = 'var(--danger)';
+          const sgn55 = (n, unit) => (n >= 0 ? '+' : '−') + (unit === 'pt' ? Math.abs(n).toFixed(1) + 'pt' : yen55(n));
+          const td55 = 'padding:2px 4px;text-align:right;white-space:nowrap;';
+          const tl55 = 'padding:2px 4px;text-align:left;white-space:nowrap;';
+          cmpHtml55 =
+            `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">` +
+            `<div style="font-weight:700;opacity:0.9;">前月の同じ日との比較</div>` +
+            `<table style="width:100%;max-width:520px;border-collapse:collapse;font-size:11px;margin-top:4px;">` +
+            `<tr style="opacity:0.7;"><td style="${tl55}"></td><td style="${td55}">実績</td><td style="${td55}">達成率</td><td style="${td55}">あと</td></tr>` +
+            `<tr><td style="${tl55}">前月 ${ps55.pm}/${ps55.asOf}</td><td style="${td55}">${yen55(ps55.total)}</td><td style="${td55}">${prePct55.toFixed(1)}%</td><td style="${td55}">${remainTxt55(ps55.remain)}</td></tr>` +
+            `<tr style="font-weight:700;"><td style="${tl55}">今月 ${curM}/${todayDate}</td><td style="${td55}">${yen55(grandTotalEffective)}</td><td style="${td55}">${curPct55.toFixed(1)}%</td><td style="${td55}">${remainTxt55(curRemain55)}</td></tr>` +
+            `<tr style="font-weight:700;"><td style="${tl55}">差</td>` +
+            `<td style="${td55}color:${dAmt55 >= 0 ? good55 : bad55};">${sgn55(dAmt55, 'yen')}</td>` +
+            `<td style="${td55}color:${dPct55 >= 0 ? good55 : bad55};">${sgn55(dPct55, 'pt')}</td>` +
+            `<td style="${td55}color:${dRemain55 <= 0 ? good55 : bad55};">${dRemain55 <= 0 ? '−' : '+'}${yen55(dRemain55)}</td></tr>` +
+            `</table>` +
+            `<div style="opacity:0.7;margin-top:2px;">` +
+            `前月目標 ${yen55(ps55.target)}／今月目標 ${yen55(target)}。${ps55.clamped ? `前月は目標日（${ps55.pm}/${ps55.asOf}）までで比較。` : ''}その他収入は日付がないため月全体の額で計算</div>` +
+            `</div>`;
+        }
+      }
       const cycleWhy = cyc.hasPrevSeg
         ? `この期間に稼いだ分が ${goalLabel} までに入金される（業者ごとに締めが違うため、日数は売上構成比で重み付け）`
         : `当月の目標日までに入金される稼働日`;
@@ -3631,7 +3708,7 @@ function recalcAll() {
         `サイクル ${cyc.label}　｜　経過 ${cyc.elapsedWorkDays.toFixed(1)}/${cyc.totalWorkDays.toFixed(1)}稼働日　｜　` +
         `今日終わりの想定 ¥${expected.toLocaleString()}　｜　実績 ¥${grandTotalEffective.toLocaleString()}　` +
         `<span style="color:${diffColor};font-weight:700;">${diffText}</span>` +
-        `<br><span style="opacity:0.75;">${cycleWhy}</span>`;
+        `<br><span style="opacity:0.75;">${cycleWhy}</span>` + cmpHtml55;
     }
   }
 
@@ -4545,7 +4622,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v54';
+      const CACHE_NAME = 'delivery-dashboard-personal-v55';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
