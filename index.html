@@ -1371,7 +1371,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-11-15 v55';
+const APP_BUILD = '2026-11-15 v56';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3682,12 +3682,12 @@ function recalcAll() {
           const remainTxt55 = n => (n < 0 ? '余剰 ' : '') + yen55(n);
           const good55 = 'var(--success)', bad55 = 'var(--danger)';
           const sgn55 = (n, unit) => (n >= 0 ? '+' : '−') + (unit === 'pt' ? Math.abs(n).toFixed(1) + 'pt' : yen55(n));
-          const td55 = 'padding:2px 4px;text-align:right;white-space:nowrap;';
-          const tl55 = 'padding:2px 4px;text-align:left;white-space:nowrap;';
+          const td55 = 'padding:4px 8px;text-align:right;white-space:nowrap;';
+          const tl55 = 'padding:4px 8px;text-align:left;white-space:nowrap;';
           cmpHtml55 =
             `<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">` +
-            `<div style="font-weight:700;opacity:0.9;">前月の同じ日との比較</div>` +
-            `<table style="width:100%;max-width:520px;border-collapse:collapse;font-size:11px;margin-top:4px;">` +
+            `<div style="font-weight:700;opacity:0.95;font-size:15px;">前月の同じ日との比較</div>` +
+            `<table style="width:100%;max-width:680px;border-collapse:collapse;font-size:16px;margin-top:6px;">` +
             `<tr style="opacity:0.7;"><td style="${tl55}"></td><td style="${td55}">実績</td><td style="${td55}">達成率</td><td style="${td55}">あと</td></tr>` +
             `<tr><td style="${tl55}">前月 ${ps55.pm}/${ps55.asOf}</td><td style="${td55}">${yen55(ps55.total)}</td><td style="${td55}">${prePct55.toFixed(1)}%</td><td style="${td55}">${remainTxt55(ps55.remain)}</td></tr>` +
             `<tr style="font-weight:700;"><td style="${tl55}">今月 ${curM}/${todayDate}</td><td style="${td55}">${yen55(grandTotalEffective)}</td><td style="${td55}">${curPct55.toFixed(1)}%</td><td style="${td55}">${remainTxt55(curRemain55)}</td></tr>` +
@@ -3696,7 +3696,7 @@ function recalcAll() {
             `<td style="${td55}color:${dPct55 >= 0 ? good55 : bad55};">${sgn55(dPct55, 'pt')}</td>` +
             `<td style="${td55}color:${dRemain55 <= 0 ? good55 : bad55};">${dRemain55 <= 0 ? '−' : '+'}${yen55(dRemain55)}</td></tr>` +
             `</table>` +
-            `<div style="opacity:0.7;margin-top:2px;">` +
+            `<div style="opacity:0.75;margin-top:4px;font-size:12px;">` +
             `前月目標 ${yen55(ps55.target)}／今月目標 ${yen55(target)}。${ps55.clamped ? `前月は目標日（${ps55.pm}/${ps55.asOf}）までで比較。` : ''}その他収入は日付がないため月全体の額で計算</div>` +
             `</div>`;
         }
@@ -4622,7 +4622,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v55';
+      const CACHE_NAME = 'delivery-dashboard-personal-v56';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
