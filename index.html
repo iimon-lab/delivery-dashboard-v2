@@ -1371,7 +1371,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-11-15 v56';
+const APP_BUILD = '2026-11-23 v57';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3629,6 +3629,10 @@ function recalcAll() {
       paceText = '🎉 達成'; paceColor = '#ffd700';
     } else if (remainingWorkDays <= 0) {
       paceText = '❌ 未達'; paceColor = 'var(--danger)';
+    } else if (remaining > 0 && effDenom <= 0) {
+      // v57: 残りに有効稼働日が無い（残りが休日設定日だけ／締切後だけ）のに目標に届いていない＝未達。
+      // 従来は dailyNeeded=0 となり ratio=0 で「順調」と誤表示していた。
+      paceText = '❌ 未達'; paceColor = 'var(--danger)';
     } else if (daysWorked > 0 && avgPerDay > 0) {
       const ratio = dailyNeeded / avgPerDay;
       if (ratio <= 1.3) { paceText = '📈 順調'; paceColor = 'var(--success)'; }
@@ -4622,7 +4626,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v56';
+      const CACHE_NAME = 'delivery-dashboard-personal-v57';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
