@@ -1371,7 +1371,7 @@ function isExtraVisible() { return document.getElementById('showExtra').checked;
 
 // ============ APP UPDATE (#31 アプリ内更新ボタン) ============
 // 表示用ビルド名。デプロイのたびに下の CACHE_NAME と一緒に上げる（設定パネルの「現在 …」に表示）。
-const APP_BUILD = '2026-11-23 v58';
+const APP_BUILD = '2026-11-26 v59';
 
 // 最新版に更新：数字(localStorage)は残したまま、アプリ本体キャッシュとSW登録だけ破棄して取り直す
 async function forceAppUpdate() {
@@ -3641,6 +3641,9 @@ function recalcAll() {
       if (ratio <= 1.3) { paceText = '📈 順調'; paceColor = 'var(--success)'; }
       else if (ratio <= 2.0) { paceText = '⚠️ やや遅れ'; paceColor = 'var(--warning)'; }
       else { paceText = '🔥 要加速'; paceColor = 'var(--danger)'; }
+    } else if (cycExpected > 0 && cycDiff >= 0) {
+      // v59: 暦月の稼働が0日でも、先取り分がサイクルの想定額以上なら「順調」（達成率だけで要加速にしない）。
+      paceText = '📈 順調'; paceColor = 'var(--success)';
     } else {
       paceText = pct >= 70 ? '📈 順調' : pct >= 40 ? '⚠️ やや遅れ' : '🔥 要加速';
       paceColor = pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--danger)';
@@ -4629,7 +4632,7 @@ init();
   // --- Service Worker (inline via Blob URL) ---
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE_NAME = 'delivery-dashboard-personal-v58';
+      const CACHE_NAME = 'delivery-dashboard-personal-v59';
       const OFFLINE_URL = './';
 
       self.addEventListener('install', function(event) {
